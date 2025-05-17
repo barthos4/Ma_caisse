@@ -9,7 +9,9 @@ import { PlusCircle, Edit2, Trash2 } from "lucide-react";
 import type { Transaction } from "@/types";
 import { useTransactions, useCategories } from "@/lib/mock-data";
 import { format } from 'date-fns';
+import { fr } from 'date-fns/locale';
 import { Badge } from "@/components/ui/badge";
+import { formatCurrencyCFA } from "@/lib/utils";
 
 export default function TransactionsPage() {
   const { getTransactions, deleteTransaction } = useTransactions();
@@ -30,28 +32,31 @@ export default function TransactionsPage() {
   };
   
   const handleDeleteTransaction = (id: string) => {
-    if (confirm("Are you sure you want to delete this transaction?")) {
+    if (confirm("Êtes-vous sûr de vouloir supprimer cette transaction ?")) {
       deleteTransaction(id);
     }
   };
 
+  const getTransactionTypeName = (type: 'income' | 'expense') => {
+    return type === 'income' ? 'Revenu' : 'Dépense';
+  }
 
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Transactions</h1>
-          <p className="text-muted-foreground">Manage your income and expenses.</p>
+          <p className="text-muted-foreground">Gérez vos revenus et dépenses.</p>
         </div>
         <Dialog open={isFormOpen} onOpenChange={setIsFormOpen}>
           <DialogTrigger asChild>
             <Button onClick={handleAddTransaction} className="w-full sm:w-auto">
-              <PlusCircle className="mr-2 h-4 w-4" /> Add Transaction
+              <PlusCircle className="mr-2 h-4 w-4" /> Ajouter une Transaction
             </Button>
           </DialogTrigger>
           <DialogContent className="sm:max-w-lg">
             <DialogHeader>
-              <DialogTitle>{editingTransaction ? "Edit" : "Add"} Transaction</DialogTitle>
+              <DialogTitle>{editingTransaction ? "Modifier" : "Ajouter"} une Transaction</DialogTitle>
             </DialogHeader>
             <TransactionForm 
               transactionToEdit={editingTransaction} 
@@ -63,8 +68,8 @@ export default function TransactionsPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Transaction History</CardTitle>
-          <CardDescription>A list of all your recorded financial activities.</CardDescription>
+          <CardTitle>Historique des Transactions</CardTitle>
+          <CardDescription>Une liste de toutes vos activités financières enregistrées.</CardDescription>
         </CardHeader>
         <CardContent>
           <Table>
@@ -72,9 +77,9 @@ export default function TransactionsPage() {
               <TableRow>
                 <TableHead>Date</TableHead>
                 <TableHead>Description</TableHead>
-                <TableHead>Category</TableHead>
+                <TableHead>Catégorie</TableHead>
                 <TableHead>Type</TableHead>
-                <TableHead className="text-right">Amount</TableHead>
+                <TableHead className="text-right">Montant</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
@@ -82,30 +87,30 @@ export default function TransactionsPage() {
               {transactions.length === 0 && (
                 <TableRow>
                   <TableCell colSpan={6} className="text-center text-muted-foreground h-24">
-                    No transactions yet. Click "Add Transaction" to get started.
+                    Aucune transaction pour le moment. Cliquez sur "Ajouter une Transaction" pour commencer.
                   </TableCell>
                 </TableRow>
               )}
               {transactions.map((transaction) => (
                 <TableRow key={transaction.id}>
-                  <TableCell>{format(transaction.date, 'PP')}</TableCell>
+                  <TableCell>{format(transaction.date, 'PP', { locale: fr })}</TableCell>
                   <TableCell className="font-medium max-w-xs truncate">{transaction.description}</TableCell>
                   <TableCell>
                     <Badge variant="secondary">{getCategoryById(transaction.categoryId)?.name || 'N/A'}</Badge>
                   </TableCell>
                   <TableCell>
                     <Badge variant={transaction.type === 'income' ? 'default' : 'outline'} className={transaction.type === 'income' ? 'bg-accent text-accent-foreground border-accent' : ''}>
-                      {transaction.type.charAt(0).toUpperCase() + transaction.type.slice(1)}
+                      {getTransactionTypeName(transaction.type)}
                     </Badge>
                   </TableCell>
                   <TableCell className={`text-right font-semibold ${transaction.type === 'income' ? 'text-accent-foreground' : 'text-destructive'}`}>
-                    {transaction.type === 'income' ? '+' : '-'}${transaction.amount.toFixed(2)}
+                    {transaction.type === 'income' ? '+' : '-'}{formatCurrencyCFA(transaction.amount)}
                   </TableCell>
                   <TableCell className="text-right">
-                    <Button variant="ghost" size="icon" onClick={() => handleEditTransaction(transaction)} className="mr-1">
+                    <Button variant="ghost" size="icon" onClick={() => handleEditTransaction(transaction)} className="mr-1" aria-label="Modifier">
                       <Edit2 className="h-4 w-4" />
                     </Button>
-                    <Button variant="ghost" size="icon" onClick={() => handleDeleteTransaction(transaction.id)} className="text-destructive hover:text-destructive">
+                    <Button variant="ghost" size="icon" onClick={() => handleDeleteTransaction(transaction.id)} className="text-destructive hover:text-destructive" aria-label="Supprimer">
                       <Trash2 className="h-4 w-4" />
                     </Button>
                   </TableCell>

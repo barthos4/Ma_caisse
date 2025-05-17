@@ -13,16 +13,17 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
+import { fr } from "date-fns/locale";
 import type { Transaction, Category } from "@/types";
 import { useTransactions, useCategories } from "@/lib/mock-data";
 import { useEffect, useState } from "react";
 
 const transactionFormSchema = z.object({
-  date: z.date({ required_error: "A date is required." }),
-  description: z.string().min(1, "Description is required.").max(100, "Description is too long."),
-  amount: z.coerce.number().positive("Amount must be positive."),
-  type: z.enum(["income", "expense"], { required_error: "Transaction type is required." }),
-  categoryId: z.string().min(1, "Category is required."),
+  date: z.date({ required_error: "Une date est requise." }),
+  description: z.string().min(1, "La description est requise.").max(100, "La description est trop longue."),
+  amount: z.coerce.number().positive("Le montant doit être positif."),
+  type: z.enum(["income", "expense"], { required_error: "Le type de transaction est requis." }),
+  categoryId: z.string().min(1, "La catégorie est requise."),
 });
 
 type TransactionFormValues = z.infer<typeof transactionFormSchema>;
@@ -42,7 +43,7 @@ export function TransactionForm({ transactionToEdit, onFormSubmit }: Transaction
     defaultValues: transactionToEdit
       ? {
           ...transactionToEdit,
-          amount: Math.abs(transactionToEdit.amount), // Store as positive for form
+          amount: Math.abs(transactionToEdit.amount), 
         }
       : {
           date: new Date(),
@@ -57,13 +58,15 @@ export function TransactionForm({ transactionToEdit, onFormSubmit }: Transaction
 
   useEffect(() => {
     const allCategories = getCategories();
-    setAvailableCategories(allCategories.filter(c => c.type === transactionType || (transactionType === 'expense' && c.type === 'expense') || (transactionType === 'income' && c.type === 'income')));
-    // Reset category if it's not valid for the new type
+    const filtered = allCategories.filter(c => c.type === transactionType);
+    setAvailableCategories(filtered);
+    
     const currentCategoryId = form.getValues("categoryId");
-    if (currentCategoryId && !allCategories.find(c => c.id === currentCategoryId && c.type === transactionType)) {
+    if (currentCategoryId && !filtered.find(c => c.id === currentCategoryId)) {
         form.setValue("categoryId", "");
     }
-  }, [transactionType, getCategories, form]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [transactionType, getCategories, form.setValue, form.getValues]);
 
 
   useEffect(() => {
@@ -112,7 +115,7 @@ export function TransactionForm({ transactionToEdit, onFormSubmit }: Transaction
                         !field.value && "text-muted-foreground"
                       )}
                     >
-                      {field.value ? format(field.value, "PPP") : <span>Pick a date</span>}
+                      {field.value ? format(field.value, "PPP", { locale: fr }) : <span>Choisissez une date</span>}
                       <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
                     </Button>
                   </FormControl>
@@ -124,6 +127,7 @@ export function TransactionForm({ transactionToEdit, onFormSubmit }: Transaction
                     onSelect={field.onChange}
                     disabled={(date) => date > new Date() || date < new Date("1900-01-01")}
                     initialFocus
+                    locale={fr}
                   />
                 </PopoverContent>
               </Popover>
@@ -139,7 +143,7 @@ export function TransactionForm({ transactionToEdit, onFormSubmit }: Transaction
             <FormItem>
               <FormLabel>Description</FormLabel>
               <FormControl>
-                <Textarea placeholder="e.g., Groceries, Salary" {...field} />
+                <Textarea placeholder="ex: Courses, Salaire" {...field} />
               </FormControl>
               <FormMessage />
             </FormItem>
@@ -151,9 +155,9 @@ export function TransactionForm({ transactionToEdit, onFormSubmit }: Transaction
           name="amount"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Amount</FormLabel>
+              <FormLabel>Montant</FormLabel>
               <FormControl>
-                <Input type="number" placeholder="0.00" {...field} step="0.01" />
+                <Input type="number" placeholder="0,00" {...field} step="0.01" />
               </FormControl>
               <FormMessage />
             </FormItem>
@@ -168,7 +172,10 @@ export function TransactionForm({ transactionToEdit, onFormSubmit }: Transaction
               <FormLabel>Type</FormLabel>
               <FormControl>
                 <RadioGroup
-                  onValueChange={field.onChange}
+                  onValueChange={(value) => {
+                    field.onChange(value);
+                    // form.setValue("categoryId", ""); // Reset category when type changes - handled in useEffect
+                  }}
                   defaultValue={field.value}
                   className="flex space-x-4"
                 >
@@ -176,13 +183,13 @@ export function TransactionForm({ transactionToEdit, onFormSubmit }: Transaction
                     <FormControl>
                       <RadioGroupItem value="income" />
                     </FormControl>
-                    <FormLabel className="font-normal">Income</FormLabel>
+                    <FormLabel className="font-normal">Revenu</FormLabel>
                   </FormItem>
                   <FormItem className="flex items-center space-x-2 space-y-0">
                     <FormControl>
                       <RadioGroupItem value="expense" />
                     </FormControl>
-                    <FormLabel className="font-normal">Expense</FormLabel>
+                    <FormLabel className="font-normal">Dépense</FormLabel>
                   </FormItem>
                 </RadioGroup>
               </FormControl>
@@ -196,11 +203,11 @@ export function TransactionForm({ transactionToEdit, onFormSubmit }: Transaction
           name="categoryId"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Category</FormLabel>
-              <Select onValueChange={field.onChange} defaultValue={field.value} value={field.value}>
+              <FormLabel>Catégorie</FormLabel>
+              <Select onValueChange={field.onChange} value={field.value} defaultValue={field.value}>
                 <FormControl>
                   <SelectTrigger>
-                    <SelectValue placeholder="Select a category" />
+                    <SelectValue placeholder="Sélectionnez une catégorie" />
                   </SelectTrigger>
                 </FormControl>
                 <SelectContent>
@@ -209,7 +216,7 @@ export function TransactionForm({ transactionToEdit, onFormSubmit }: Transaction
                       {category.name}
                     </SelectItem>
                   ))}
-                  {availableCategories.length === 0 && <p className="p-2 text-sm text-muted-foreground">No categories for this type.</p>}
+                  {availableCategories.length === 0 && <p className="p-2 text-sm text-muted-foreground">Aucune catégorie pour ce type.</p>}
                 </SelectContent>
               </Select>
               <FormMessage />
@@ -217,7 +224,7 @@ export function TransactionForm({ transactionToEdit, onFormSubmit }: Transaction
           )}
         />
         <div className="flex justify-end pt-2">
-          <Button type="submit">{transactionToEdit ? "Save Changes" : "Add Transaction"}</Button>
+          <Button type="submit">{transactionToEdit ? "Enregistrer les Modifications" : "Ajouter la Transaction"}</Button>
         </div>
       </form>
     </Form>

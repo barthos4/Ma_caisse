@@ -11,17 +11,17 @@ import {
   SidebarFooter,
   SidebarTrigger,
 } from '@/components/ui/sidebar';
-import { Button } from '@/components/ui/button';
+// import { Button } from '@/components/ui/button'; // Not used directly
 import { Separator } from '@/components/ui/separator';
 import { Home, ArrowLeftRight, LayoutGrid, BarChart3, BookText, Settings, LogOut, Briefcase } from 'lucide-react';
 import { useIsMobile } from '@/hooks/use-mobile';
 
 const navItems = [
-  { href: '/', label: 'Dashboard', icon: Home },
+  { href: '/', label: 'Tableau de Bord', icon: Home },
   { href: '/transactions', label: 'Transactions', icon: ArrowLeftRight },
-  { href: '/categories', label: 'Categories', icon: LayoutGrid },
-  { href: '/reports', label: 'Reports', icon: BarChart3 },
-  { href: '/journal', label: 'Cash Journal', icon: BookText },
+  { href: '/categories', label: 'Catégories', icon: LayoutGrid },
+  { href: '/reports', label: 'Rapports', icon: BarChart3 },
+  { href: '/journal', label: 'Journal de Caisse', icon: BookText },
 ];
 
 export function AppSidebar() {
@@ -60,15 +60,15 @@ export function AppSidebar() {
         <Separator className="my-2" />
         <SidebarMenu>
           <SidebarMenuItem>
-            <SidebarMenuButton tooltip="Settings" className="group-data-[collapsible=icon]:justify-center">
+            <SidebarMenuButton tooltip="Paramètres" className="group-data-[collapsible=icon]:justify-center">
               <Settings className="h-5 w-5 shrink-0" />
-              <span className="group-data-[collapsible=icon]:hidden">Settings</span>
+              <span className="group-data-[collapsible=icon]:hidden">Paramètres</span>
             </SidebarMenuButton>
           </SidebarMenuItem>
           <SidebarMenuItem>
-            <SidebarMenuButton tooltip="Logout" className="group-data-[collapsible=icon]:justify-center">
+            <SidebarMenuButton tooltip="Déconnexion" className="group-data-[collapsible=icon]:justify-center">
               <LogOut className="h-5 w-5 shrink-0" />
-              <span className="group-data-[collapsible=icon]:hidden">Logout</span>
+              <span className="group-data-[collapsible=icon]:hidden">Déconnexion</span>
             </SidebarMenuButton>
           </SidebarMenuItem>
         </SidebarMenu>

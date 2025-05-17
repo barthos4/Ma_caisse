@@ -3,6 +3,7 @@ import { Inter } from 'next/font/google'; // Using Inter as a clean sans-serif f
 import './globals.css';
 import { MainLayout } from '@/components/layout/main-layout';
 import { Toaster } from "@/components/ui/toaster";
+import { fr } from 'date-fns/locale'; // Import French locale for date-fns if needed globally, or import in specific components
 
 const inter = Inter({
   subsets: ['latin'],
@@ -11,7 +12,7 @@ const inter = Inter({
 
 export const metadata: Metadata = {
   title: 'BudgetBaguette',
-  description: 'Your personal guide to financial wellness.',
+  description: 'Votre guide personnel pour le bien-être financier.',
 };
 
 export default function RootLayout({
@@ -20,7 +21,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" suppressHydrationWarning>
+    <html lang="fr" suppressHydrationWarning>
       <body className={`${inter.variable} font-sans antialiased`}>
         <MainLayout>{children}</MainLayout>
         <Toaster />

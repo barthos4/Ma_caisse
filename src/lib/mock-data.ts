@@ -9,22 +9,22 @@ let nextTransactionId = 4;
 let nextCategoryId = 6;
 
 const initialTransactions: Transaction[] = [
-  { id: '1', date: new Date('2024-07-28'), description: 'Monthly Salary', amount: 3500, type: 'income', categoryId: '1' },
-  { id: '2', date: new Date('2024-07-29'), description: 'Groceries from SuperMart', amount: 120.50, type: 'expense', categoryId: '2' },
-  { id: '3', date: new Date('2024-07-30'), description: 'Apartment Rent', amount: 1200, type: 'expense', categoryId: '3' },
-  { id: '4', date: new Date('2024-07-30'), description: 'Dinner with Friends', amount: 65.00, type: 'expense', categoryId: '5' },
-  { id: '5', date: new Date('2024-07-31'), description: 'Freelance Project Payment', amount: 500, type: 'income', categoryId: '1' },
+  { id: '1', date: new Date('2024-07-28'), description: 'Salaire mensuel', amount: 350000, type: 'income', categoryId: '1' },
+  { id: '2', date: new Date('2024-07-29'), description: 'Courses au SuperMarché', amount: 12050, type: 'expense', categoryId: '2' },
+  { id: '3', date: new Date('2024-07-30'), description: 'Loyer appartement', amount: 120000, type: 'expense', categoryId: '3' },
+  { id: '4', date: new Date('2024-07-30'), description: 'Dîner avec des amis', amount: 6500, type: 'expense', categoryId: '5' },
+  { id: '5', date: new Date('2024-07-31'), description: 'Paiement projet freelance', amount: 50000, type: 'income', categoryId: '7' },
 ];
 
 const initialCategories: Category[] = [
-  { id: '1', name: 'Salary', type: 'income' },
-  { id: '2', name: 'Groceries', type: 'expense' },
-  { id: '3', name: 'Rent/Mortgage', type: 'expense' },
-  { id: '4', name: 'Utilities', type: 'expense' },
-  { id: '5', name: 'Dining Out', type: 'expense' },
-  { id: '6', name: 'Transportation', type: 'expense' },
+  { id: '1', name: 'Salaire', type: 'income' },
+  { id: '2', name: 'Courses alimentaires', type: 'expense' },
+  { id: '3', name: 'Loyer/Prêt immobilier', type: 'expense' },
+  { id: '4', name: 'Factures (eau, électricité)', type: 'expense' },
+  { id: '5', name: 'Restaurant et sorties', type: 'expense' },
+  { id: '6', name: 'Transport', type: 'expense' },
   { id: '7', name: 'Freelance', type: 'income' },
-  { id: '8', name: 'Entertainment', type: 'expense' },
+  { id: '8', name: 'Loisirs', type: 'expense' },
 ];
 
 
@@ -90,7 +90,7 @@ export const useCategories = () => {
     return () => categoryListeners.delete(listener);
   }, []);
 
-  const getCategories = useCallback(() => [...categoriesStore].sort((a,b) => a.name.localeCompare(b.name)), []);
+  const getCategories = useCallback(() => [...categoriesStore].sort((a,b) => a.name.localeCompare(b.name, 'fr')), []);
 
   const addCategory = useCallback((category: Omit<Category, 'id'>) => {
     const newCategory: Category = { ...category, id: String(nextCategoryId++) };
@@ -113,7 +113,7 @@ export const useCategories = () => {
     // Prevent deleting categories used in transactions (basic check)
     const isUsed = transactionsStore.some(t => t.categoryId === id);
     if (isUsed) {
-      alert("Cannot delete category as it is used in transactions.");
+      alert("Impossible de supprimer la catégorie car elle est utilisée dans des transactions.");
       return false;
     }
     categoriesStore = categoriesStore.filter(c => c.id !== id);
@@ -142,7 +142,7 @@ export const useDashboardData = () => {
   const spendingSummary = transactions
     .filter(t => t.type === 'expense')
     .reduce((acc, t) => {
-      const categoryName = getCategoryById(t.categoryId)?.name || 'Uncategorized';
+      const categoryName = getCategoryById(t.categoryId)?.name || 'Non classé';
       acc[categoryName] = (acc[categoryName] || 0) + t.amount;
       return acc;
     }, {} as Record<string, number>);

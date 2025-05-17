@@ -4,7 +4,9 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useTransactions, useCategories } from "@/lib/mock-data";
 import { format } from 'date-fns';
+import { fr } from 'date-fns/locale';
 import { Badge } from "@/components/ui/badge";
+import { formatCurrencyCFA } from "@/lib/utils";
 
 export default function JournalPage() {
   const { getTransactions } = useTransactions();
@@ -26,7 +28,7 @@ export default function JournalPage() {
         }
         return {
           ...t,
-          categoryName: getCategoryById(t.categoryId)?.name || 'N/A',
+          categoryName: getCategoryById(t.categoryId)?.name || 'Non classé(e)',
           balance: runningBalance,
         };
       })
@@ -36,14 +38,14 @@ export default function JournalPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-bold tracking-tight">Cash Journal</h1>
-        <p className="text-muted-foreground">A chronological record of all your financial transactions.</p>
+        <h1 className="text-3xl font-bold tracking-tight">Journal de Caisse</h1>
+        <p className="text-muted-foreground">Un enregistrement chronologique de toutes vos transactions financières.</p>
       </div>
 
       <Card>
         <CardHeader>
-          <CardTitle>All Transactions</CardTitle>
-          <CardDescription>Detailed log including running balance after each transaction.</CardDescription>
+          <CardTitle>Toutes les Transactions</CardTitle>
+          <CardDescription>Journal détaillé incluant le solde après chaque transaction.</CardDescription>
         </CardHeader>
         <CardContent>
           <Table>
@@ -51,33 +53,33 @@ export default function JournalPage() {
               <TableRow>
                 <TableHead>Date</TableHead>
                 <TableHead>Description</TableHead>
-                <TableHead>Category</TableHead>
-                <TableHead className="text-right">Income</TableHead>
-                <TableHead className="text-right">Expense</TableHead>
-                <TableHead className="text-right">Balance</TableHead>
+                <TableHead>Catégorie</TableHead>
+                <TableHead className="text-right">Revenu</TableHead>
+                <TableHead className="text-right">Dépense</TableHead>
+                <TableHead className="text-right">Solde</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {journalEntries.length === 0 && (
                 <TableRow>
                   <TableCell colSpan={6} className="text-center text-muted-foreground h-24">
-                    No transactions recorded yet.
+                    Aucune transaction enregistrée pour le moment.
                   </TableCell>
                 </TableRow>
               )}
               {journalEntries.map((entry) => (
                 <TableRow key={entry.id}>
-                  <TableCell>{format(entry.date, 'PP')}</TableCell>
+                  <TableCell>{format(entry.date, 'PP', { locale: fr })}</TableCell>
                   <TableCell className="font-medium max-w-xs truncate">{entry.description}</TableCell>
                   <TableCell><Badge variant="outline">{entry.categoryName}</Badge></TableCell>
                   <TableCell className="text-right text-accent-foreground">
-                    {entry.type === 'income' ? `$${entry.amount.toFixed(2)}` : '-'}
+                    {entry.type === 'income' ? formatCurrencyCFA(entry.amount) : '-'}
                   </TableCell>
                   <TableCell className="text-right text-destructive">
-                    {entry.type === 'expense' ? `$${entry.amount.toFixed(2)}` : '-'}
+                    {entry.type === 'expense' ? formatCurrencyCFA(entry.amount) : '-'}
                   </TableCell>
                   <TableCell className={`text-right font-semibold ${entry.balance >=0 ? 'text-foreground':'text-destructive'}`}>
-                    ${entry.balance.toFixed(2)}
+                    {formatCurrencyCFA(entry.balance)}
                   </TableCell>
                 </TableRow>
               ))}

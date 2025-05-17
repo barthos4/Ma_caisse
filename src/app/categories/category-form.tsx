@@ -11,8 +11,8 @@ import { useCategories } from "@/lib/mock-data";
 import { useEffect } from "react";
 
 const categoryFormSchema = z.object({
-  name: z.string().min(1, "Category name is required.").max(50, "Category name is too long."),
-  type: z.enum(["income", "expense"], { required_error: "Category type is required." }),
+  name: z.string().min(1, "Le nom de la catégorie est requis.").max(50, "Le nom de la catégorie est trop long."),
+  type: z.enum(["income", "expense"], { required_error: "Le type de catégorie est requis." }),
 });
 
 type CategoryFormValues = z.infer<typeof categoryFormSchema>;
@@ -59,9 +59,9 @@ export function CategoryForm({ categoryToEdit, onFormSubmit }: CategoryFormProps
           name="name"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Category Name</FormLabel>
+              <FormLabel>Nom de la Catégorie</FormLabel>
               <FormControl>
-                <Input placeholder="e.g., Groceries, Salary" {...field} />
+                <Input placeholder="ex: Courses, Salaire" {...field} />
               </FormControl>
               <FormMessage />
             </FormItem>
@@ -73,7 +73,7 @@ export function CategoryForm({ categoryToEdit, onFormSubmit }: CategoryFormProps
           name="type"
           render={({ field }) => (
             <FormItem className="space-y-3">
-              <FormLabel>Category Type</FormLabel>
+              <FormLabel>Type de Catégorie</FormLabel>
               <FormControl>
                 <RadioGroup
                   onValueChange={field.onChange}
@@ -84,13 +84,13 @@ export function CategoryForm({ categoryToEdit, onFormSubmit }: CategoryFormProps
                     <FormControl>
                       <RadioGroupItem value="income" />
                     </FormControl>
-                    <FormLabel className="font-normal">Income</FormLabel>
+                    <FormLabel className="font-normal">Revenu</FormLabel>
                   </FormItem>
                   <FormItem className="flex items-center space-x-2 space-y-0">
                     <FormControl>
                       <RadioGroupItem value="expense" />
                     </FormControl>
-                    <FormLabel className="font-normal">Expense</FormLabel>
+                    <FormLabel className="font-normal">Dépense</FormLabel>
                   </FormItem>
                 </RadioGroup>
               </FormControl>
@@ -99,7 +99,7 @@ export function CategoryForm({ categoryToEdit, onFormSubmit }: CategoryFormProps
           )}
         />
         <div className="flex justify-end pt-2">
-          <Button type="submit">{categoryToEdit ? "Save Changes" : "Add Category"}</Button>
+          <Button type="submit">{categoryToEdit ? "Enregistrer les Modifications" : "Ajouter la Catégorie"}</Button>
         </div>
       </form>
     </Form>

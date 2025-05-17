@@ -2,6 +2,7 @@
 
 import * as React from "react"
 import { format } from "date-fns"
+import { fr } from "date-fns/locale" // Import French locale
 import { Calendar as CalendarIcon } from "lucide-react"
 import type { DateRange } from "react-day-picker"
 
@@ -40,14 +41,14 @@ export function DateRangePicker({
             {date?.from ? (
               date.to ? (
                 <>
-                  {format(date.from, "LLL dd, y")} -{" "}
-                  {format(date.to, "LLL dd, y")}
+                  {format(date.from, "LLL dd, y", { locale: fr })} -{" "}
+                  {format(date.to, "LLL dd, y", { locale: fr })}
                 </>
               ) : (
-                format(date.from, "LLL dd, y")
+                format(date.from, "LLL dd, y", { locale: fr })
               )
             ) : (
-              <span>Pick a date range</span>
+              <span>Choisissez une plage de dates</span>
             )}
           </Button>
         </PopoverTrigger>
@@ -59,6 +60,7 @@ export function DateRangePicker({
             selected={date}
             onSelect={onDateChange}
             numberOfMonths={2}
+            locale={fr} // Use French locale for the calendar
           />
         </PopoverContent>
       </Popover>

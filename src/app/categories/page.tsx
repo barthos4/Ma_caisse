@@ -28,30 +28,34 @@ export default function CategoriesPage() {
   };
 
   const handleDeleteCategory = (id: string) => {
-    if (confirm("Are you sure you want to delete this category? This cannot be undone.")) {
+    if (confirm("Êtes-vous sûr de vouloir supprimer cette catégorie ? Cette action est irréversible.")) {
       const success = deleteCategory(id);
       if (!success) {
-        // Alert is handled in deleteCategory if it fails
+        // L'alerte est gérée dans deleteCategory en cas d'échec
       }
     }
   };
+  
+  const getCategoryTypeName = (type: 'income' | 'expense') => {
+    return type === 'income' ? 'Revenu' : 'Dépense';
+  }
 
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Categories</h1>
-          <p className="text-muted-foreground">Organize your income and expenses.</p>
+          <h1 className="text-3xl font-bold tracking-tight">Catégories</h1>
+          <p className="text-muted-foreground">Organisez vos revenus et dépenses.</p>
         </div>
         <Dialog open={isFormOpen} onOpenChange={setIsFormOpen}>
           <DialogTrigger asChild>
             <Button onClick={handleAddCategory} className="w-full sm:w-auto">
-              <PlusCircle className="mr-2 h-4 w-4" /> Add Category
+              <PlusCircle className="mr-2 h-4 w-4" /> Ajouter une Catégorie
             </Button>
           </DialogTrigger>
           <DialogContent className="sm:max-w-md">
             <DialogHeader>
-              <DialogTitle>{editingCategory ? "Edit" : "Add"} Category</DialogTitle>
+              <DialogTitle>{editingCategory ? "Modifier" : "Ajouter"} une Catégorie</DialogTitle>
             </DialogHeader>
             <CategoryForm 
               categoryToEdit={editingCategory} 
@@ -63,14 +67,14 @@ export default function CategoriesPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Category List</CardTitle>
-          <CardDescription>All your defined categories.</CardDescription>
+          <CardTitle>Liste des Catégories</CardTitle>
+          <CardDescription>Toutes vos catégories définies.</CardDescription>
         </CardHeader>
         <CardContent>
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Name</TableHead>
+                <TableHead>Nom</TableHead>
                 <TableHead>Type</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
               </TableRow>
@@ -79,7 +83,7 @@ export default function CategoriesPage() {
               {categories.length === 0 && (
                 <TableRow>
                   <TableCell colSpan={3} className="text-center text-muted-foreground h-24">
-                    No categories yet. Click "Add Category" to create one.
+                    Aucune catégorie pour le moment. Cliquez sur "Ajouter une Catégorie" pour en créer une.
                   </TableCell>
                 </TableRow>
               )}
@@ -88,14 +92,14 @@ export default function CategoriesPage() {
                   <TableCell className="font-medium">{category.name}</TableCell>
                   <TableCell>
                     <Badge variant={category.type === 'income' ? 'default' : 'secondary'} className={category.type === 'income' ? 'bg-accent text-accent-foreground border-accent' : ''}>
-                      {category.type.charAt(0).toUpperCase() + category.type.slice(1)}
+                      {getCategoryTypeName(category.type)}
                     </Badge>
                   </TableCell>
                   <TableCell className="text-right">
-                    <Button variant="ghost" size="icon" onClick={() => handleEditCategory(category)} className="mr-1">
+                    <Button variant="ghost" size="icon" onClick={() => handleEditCategory(category)} className="mr-1" aria-label="Modifier">
                       <Edit2 className="h-4 w-4" />
                     </Button>
-                    <Button variant="ghost" size="icon" onClick={() => handleDeleteCategory(category.id)} className="text-destructive hover:text-destructive">
+                    <Button variant="ghost" size="icon" onClick={() => handleDeleteCategory(category.id)} className="text-destructive hover:text-destructive" aria-label="Supprimer">
                       <Trash2 className="h-4 w-4" />
                     </Button>
                   </TableCell>
