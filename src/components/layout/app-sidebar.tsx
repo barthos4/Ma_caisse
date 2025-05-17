@@ -29,7 +29,7 @@ export function AppSidebar() {
   const isMobile = useIsMobile();
 
   return (
-    <Sidebar collapsible={isMobile ? "offcanvas" : "icon"}>
+    <Sidebar collapsible={isMobile ? "offcanvas" : "icon"} className="print:hidden">
       <SidebarHeader className="p-4">
         <div className="flex items-center gap-2 group-data-[collapsible=icon]:justify-center">
            <Briefcase className="h-8 w-8 text-primary shrink-0" />

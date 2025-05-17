@@ -135,3 +135,69 @@
     @apply bg-primary/60;
   }
 }
+
+/* Print specific styles */
+@media print {
+  body {
+    -webkit-print-color-adjust: exact; /* Ensures background colors and images are printed in Chrome/Safari */
+    print-color-adjust: exact; /* Standard property */
+    background-color: #fff !important; /* Force white background for print */
+    color: #000 !important; /* Force black text for print */
+  }
+  
+  .print\:hidden {
+    display: none !important;
+  }
+  .print\:block {
+    display: block !important;
+  }
+  .print\:table {
+    display: table !important;
+  }
+  .print\:table-row {
+    display: table-row !important;
+  }
+  .print\:table-cell {
+    display: table-cell !important;
+  }
+  .print\:p-0 {
+    padding: 0 !important;
+  }
+  .print\:m-0 {
+    margin: 0 !important;
+  }
+  .print\:shadow-none {
+    box-shadow: none !important;
+  }
+  .print\:border-none {
+    border: none !important;
+  }
+  .print\:overflow-visible {
+    overflow: visible !important;
+  }
+  .print\:max-w-none {
+    max-width: none !important;
+  }
+  .print\:text-black {
+    color: #000 !important;
+  }
+  .print\:bg-white {
+    background-color: #fff !important;
+  }
+
+  /* Ensure table cells and badges are legible */
+  .print\:table th, .print\:table td {
+    color: #000 !important; /* Black text for table cells */
+    border: 1px solid #ccc !important; /* Light gray border for table cells */
+  }
+  .print\:table .badge { /* Target badges inside table specifically if needed */
+    background-color: #eee !important; /* Light gray background for badges */
+    color: #000 !important; /* Black text for badges */
+    border: 1px solid #ddd !important; /* Light border for badges */
+  }
+  
+  /* Attempt to make colored text black on print */
+  .text-accent-foreground, .text-destructive {
+    color: #000 !important; /* Overrides specific text colors */
+  }
+}
