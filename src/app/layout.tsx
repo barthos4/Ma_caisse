@@ -1,17 +1,17 @@
 import type { Metadata } from 'next';
-import { Inter } from 'next/font/google'; // Using Inter as a clean sans-serif font
+import { Inter } from 'next/font/google'; 
 import './globals.css';
 import { MainLayout } from '@/components/layout/main-layout';
 import { Toaster } from "@/components/ui/toaster";
-import { fr } from 'date-fns/locale'; // Import French locale for date-fns if needed globally, or import in specific components
+import { ThemeProvider } from "@/components/theme-provider";
 
 const inter = Inter({
   subsets: ['latin'],
-  variable: '--font-sans', // Using --font-sans as it's common with Tailwind
+  variable: '--font-sans', 
 });
 
 export const metadata: Metadata = {
-  title: 'BudgetBaguette',
+  title: 'GESTION CAISSE', // Updated app name
   description: 'Votre guide personnel pour le bien-être financier.',
 };
 
@@ -23,8 +23,15 @@ export default function RootLayout({
   return (
     <html lang="fr" suppressHydrationWarning>
       <body className={`${inter.variable} font-sans antialiased`}>
-        <MainLayout>{children}</MainLayout>
-        <Toaster />
+        <ThemeProvider
+          attribute="class"
+          defaultTheme="system"
+          enableSystem
+          disableTransitionOnChange
+        >
+          <MainLayout>{children}</MainLayout>
+          <Toaster />
+        </ThemeProvider>
       </body>
     </html>
   );

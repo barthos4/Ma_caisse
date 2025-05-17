@@ -11,10 +11,10 @@ import {
   SidebarFooter,
   SidebarTrigger,
 } from '@/components/ui/sidebar';
-// import { Button } from '@/components/ui/button'; // Not used directly
 import { Separator } from '@/components/ui/separator';
 import { Home, ArrowLeftRight, LayoutGrid, BarChart3, BookText, Settings, LogOut, Briefcase } from 'lucide-react';
 import { useIsMobile } from '@/hooks/use-mobile';
+import { ThemeSwitcher } from '@/components/theme-switcher';
 
 const navItems = [
   { href: '/', label: 'Tableau de Bord', icon: Home },
@@ -34,7 +34,7 @@ export function AppSidebar() {
         <div className="flex items-center gap-2 group-data-[collapsible=icon]:justify-center">
            <Briefcase className="h-8 w-8 text-primary shrink-0" />
           <h1 className="text-xl font-semibold text-primary group-data-[collapsible=icon]:hidden">
-            BudgetBaguette
+            GESTION CAISSE 
           </h1>
         </div>
       </SidebarHeader>
@@ -59,6 +59,9 @@ export function AppSidebar() {
       <SidebarFooter className="p-2">
         <Separator className="my-2" />
         <SidebarMenu>
+          <SidebarMenuItem>
+             <ThemeSwitcher />
+          </SidebarMenuItem>
           <SidebarMenuItem>
             <SidebarMenuButton tooltip="Paramètres" className="group-data-[collapsible=icon]:justify-center">
               <Settings className="h-5 w-5 shrink-0" />

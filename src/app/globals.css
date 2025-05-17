@@ -5,88 +5,96 @@
 @layer base {
   :root {
     --background: 210 29% 96%; /* Light Gray #F0F4F8 */
-    --foreground: 210 10% 20%; /* Dark Gray for text */
+    --foreground: 210 10% 23%; /* Darker Gray for better contrast on light bg */
 
     --card: 0 0% 100%; /* White for cards */
-    --card-foreground: 210 10% 20%; /* Dark Gray for text on cards */
+    --card-foreground: 210 10% 23%; 
 
-    --popover: 0 0% 100%; /* White for popovers */
-    --popover-foreground: 210 10% 20%; /* Dark Gray for text on popovers */
+    --popover: 0 0% 100%; 
+    --popover-foreground: 210 10% 23%;
 
     --primary: 207 86% 68%; /* Soft Blue #64B5F6 */
-    --primary-foreground: 0 0% 100%; /* White for text on primary */
+    --primary-foreground: 210 100% 15%; /* Dark blue for text on primary */
 
-    --secondary: 210 29% 90%; /* Slightly darker gray than background */
-    --secondary-foreground: 210 10% 20%; /* Dark Gray for text on secondary */
+    --secondary: 210 29% 90%; 
+    --secondary-foreground: 210 10% 23%;
 
-    --muted: 210 29% 85%; /* Darker gray for muted elements */
-    --muted-foreground: 210 10% 40%; /* Lighter dark gray for muted text */
+    --muted: 210 29% 85%; 
+    --muted-foreground: 210 10% 45%; /* Slightly lighter for muted text */
 
-    --accent: 123 35% 75%; /* Pale Green #A5D6A7 */
-    --accent-foreground: 123 30% 20%; /* Dark Green for text on accent */
+    --accent: 123 45% 65%; /* Slightly more saturated Pale Green #90C695 */
+    --accent-foreground: 123 30% 20%; 
 
-    --destructive: 0 84.2% 60.2%; /* Default red */
-    --destructive-foreground: 0 0% 98%; /* Default white for text on destructive */
+    --destructive: 0 72% 51%; /* Standard Red */
+    --destructive-foreground: 0 0% 98%;
 
-    --border: 210 20% 88%; /* Border color */
-    --input: 210 20% 92%; /* Input background */
-    --ring: 207 86% 68%; /* Primary color for rings */
+    --border: 210 20% 88%; 
+    --input: 210 20% 92%; 
+    --ring: 207 86% 68%; 
 
     --radius: 0.5rem;
 
     /* Sidebar specific colors */
-    --sidebar-background: 210 29% 98%; /* Lighter variant of background, almost white */
-    --sidebar-foreground: 207 30% 30%; /* Dark Blue/Gray */
-    --sidebar-primary: 207 86% 68%; /* Soft Blue (same as app primary) */
-    --sidebar-primary-foreground: 0 0% 100%; /* White */
-    --sidebar-accent: 207 86% 80%; /* Lighter Soft Blue for hover/accent in sidebar */
-    --sidebar-accent-foreground: 0 0% 100%; /* White */
-    --sidebar-border: 210 20% 88%; /* Consistent with app border */
-    --sidebar-ring: 207 86% 68%; /* Consistent with app ring */
+    --sidebar-background: 210 30% 98%; /* Very Light Gray, almost white */
+    --sidebar-foreground: 210 12% 35%; /* Darker, slightly desaturated blue/gray */
+    --sidebar-primary: 207 80% 60%; /* Primary for sidebar, can be same as app or distinct */
+    --sidebar-primary-foreground: 0 0% 100%; 
+    --sidebar-accent: 210 30% 90%; /* Accent for hover/active in sidebar (light gray) */
+    --sidebar-accent-foreground: 207 80% 55%; /* Text color on sidebar accent (primary-like) */
+    --sidebar-border: 210 20% 85%; 
+    --sidebar-ring: 207 80% 60%; 
     
-    --chart-1: 207 86% 68%; /* Soft Blue */
-    --chart-2: 123 35% 75%; /* Pale Green */
-    --chart-3: 25 80% 60%; /* Orange for contrast */
-    --chart-4: 280 70% 70%; /* Purple for contrast */
-    --chart-5: 0 70% 70%; /* Red for contrast */
+    --chart-1: hsl(207 86% 68%); 
+    --chart-2: hsl(123 45% 65%); 
+    --chart-3: hsl(38 90% 60%); /* Vibrant Orange */
+    --chart-4: hsl(260 70% 70%); /* Soft Purple */
+    --chart-5: hsl(0 70% 65%); /* Soft Red */
   }
 
   .dark {
-    /* Keeping dark mode defaults, can be customized later if needed */
-    --background: 210 10% 15%;
-    --foreground: 210 20% 90%;
-    --card: 210 10% 12%;
-    --card-foreground: 210 20% 90%;
-    --popover: 210 10% 12%;
-    --popover-foreground: 210 20% 90%;
-    --primary: 207 80% 65%;
-    --primary-foreground: 0 0% 100%;
-    --secondary: 210 10% 25%;
-    --secondary-foreground: 210 20% 90%;
-    --muted: 210 10% 25%;
-    --muted-foreground: 210 20% 70%;
-    --accent: 123 30% 70%;
-    --accent-foreground: 123 25% 15%;
-    --destructive: 0 70% 50%;
-    --destructive-foreground: 0 0% 100%;
-    --border: 210 10% 30%;
-    --input: 210 10% 30%;
-    --ring: 207 80% 65%;
+    --background: 210 10% 12%; /* Dark Slate Blue */
+    --foreground: 210 20% 95%; /* Light Gray for text */
 
-    --sidebar-background: 210 10% 12%;
-    --sidebar-foreground: 210 20% 90%;
-    --sidebar-primary: 207 80% 65%;
-    --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 207 75% 50%;
-    --sidebar-accent-foreground: 0 0% 100%;
-    --sidebar-border: 210 10% 20%;
-    --sidebar-ring: 207 80% 65%;
+    --card: 210 10% 18%; /* Slightly lighter than bg for cards */
+    --card-foreground: 210 20% 95%;
 
-    --chart-1: 207 80% 65%;
-    --chart-2: 123 30% 70%;
-    --chart-3: 25 75% 55%;
-    --chart-4: 280 65% 65%;
-    --chart-5: 0 65% 65%;
+    --popover: 210 10% 15%; 
+    --popover-foreground: 210 20% 95%;
+
+    --primary: 207 75% 60%; /* Slightly lighter blue for dark mode */
+    --primary-foreground: 210 20% 98%; /* Very light for text on primary */
+
+    --secondary: 210 10% 25%; 
+    --secondary-foreground: 210 20% 85%;
+
+    --muted: 210 10% 22%; 
+    --muted-foreground: 210 20% 65%; 
+
+    --accent: 123 40% 55%; /* Darker green for accent */
+    --accent-foreground: 210 20% 98%; 
+
+    --destructive: 0 65% 55%; 
+    --destructive-foreground: 0 0% 98%;
+
+    --border: 210 10% 30%; 
+    --input: 210 10% 25%; 
+    --ring: 207 75% 60%; 
+
+    /* Sidebar specific colors - Dark Mode */
+    --sidebar-background: 210 10% 10%; /* Even darker for sidebar bg */
+    --sidebar-foreground: 210 15% 85%; 
+    --sidebar-primary: 207 70% 58%; 
+    --sidebar-primary-foreground: 0 0% 100%; 
+    --sidebar-accent: 210 10% 20%; /* Accent for hover/active in dark sidebar */
+    --sidebar-accent-foreground: 207 70% 70%; 
+    --sidebar-border: 210 10% 20%; 
+    --sidebar-ring: 207 70% 58%;
+
+    --chart-1: hsl(207 75% 60%);
+    --chart-2: hsl(123 40% 55%);
+    --chart-3: hsl(38 80% 55%);
+    --chart-4: hsl(260 60% 65%);
+    --chart-5: hsl(0 60% 60%);
   }
 }
 
@@ -96,6 +104,34 @@
   }
   body {
     @apply bg-background text-foreground;
-    /* font-family is set by Next/Font in layout.tsx */
+  }
+}
+
+/* Custom scrollbar for webkit browsers */
+@layer utilities {
+  ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+  ::-webkit-scrollbar-track {
+    @apply bg-muted/50;
+    border-radius: 10px;
+  }
+  ::-webkit-scrollbar-thumb {
+    @apply bg-primary/50;
+    border-radius: 10px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    @apply bg-primary/70;
+  }
+
+  .dark ::-webkit-scrollbar-track {
+    @apply bg-muted/30;
+  }
+  .dark ::-webkit-scrollbar-thumb {
+    @apply bg-primary/40;
+  }
+  .dark ::-webkit-scrollbar-thumb:hover {
+    @apply bg-primary/60;
   }
 }
