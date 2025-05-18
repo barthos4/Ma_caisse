@@ -138,66 +138,77 @@
 
 /* Print specific styles */
 @media print {
+  @page {
+    size: A4 portrait;
+    margin: 20mm; /* Standard A4 margins, adjust as needed */
+  }
+
   body {
     -webkit-print-color-adjust: exact; /* Ensures background colors and images are printed in Chrome/Safari */
     print-color-adjust: exact; /* Standard property */
     background-color: #fff !important; /* Force white background for print */
     color: #000 !important; /* Force black text for print */
+    font-size: 10pt; /* Adjust base font size for print */
   }
   
-  .print\:hidden {
-    display: none !important;
-  }
-  .print\:block {
-    display: block !important;
-  }
-  .print\:table {
-    display: table !important;
-  }
-  .print\:table-row {
-    display: table-row !important;
-  }
-  .print\:table-cell {
-    display: table-cell !important;
-  }
-  .print\:p-0 {
-    padding: 0 !important;
-  }
-  .print\:m-0 {
-    margin: 0 !important;
-  }
-  .print\:shadow-none {
-    box-shadow: none !important;
-  }
-  .print\:border-none {
-    border: none !important;
-  }
-  .print\:overflow-visible {
-    overflow: visible !important;
-  }
-  .print\:max-w-none {
-    max-width: none !important;
-  }
-  .print\:text-black {
-    color: #000 !important;
-  }
-  .print\:bg-white {
-    background-color: #fff !important;
-  }
+  .print\:hidden { display: none !important; }
+  .print\:block { display: block !important; }
+  .print\:inline-block { display: inline-block !important; }
+  .print\:flex { display: flex !important; }
+  .print\:table { display: table !important; }
+  .print\:table-row { display: table-row !important; }
+  .print\:table-cell { display: table-cell !important; }
+
+  .print\:p-0 { padding: 0 !important; }
+  .print\:m-0 { margin: 0 !important; }
+  .print\:my-8 { margin-top: 2rem !important; margin-bottom: 2rem !important; } /* Example for specific spacing */
+  
+  .print\:shadow-none { box-shadow: none !important; }
+  .print\:border-none { border: none !important; }
+  .print\:border { border: 1px solid #ccc !important; }
+  .print\:border-b { border-bottom: 1px solid #ccc !important; }
+  .print\:border-gray-200 { border-color: #e5e7eb !important; }
+  .print\:border-gray-300 { border-color: #d1d5db !important; }
+  .print\:border-gray-400 { border-color: #9ca3af !important; }
+
+
+  .print\:overflow-visible { overflow: visible !important; }
+  .print\:max-w-none { max-width: none !important; }
+  
+  .print\:text-black { color: #000 !important; }
+  .print\:text-primary { color: hsl(var(--primary)) !important; } /* Try to keep brand colors if they print well */
+  .print\:text-muted-foreground { color: #555 !important; }
+  .print\:text-green-700 { color: #047857 !important; } /* Specific for income in journal */
+  .print\:text-red-700 { color: #b91c1c !important; } /* Specific for expense in journal */
+  .print\:bg-transparent { background-color: transparent !important; }
+  .print\:bg-white { background-color: #fff !important; }
+  .print\:bg-gray-100 { background-color: #f3f4f6 !important; }
 
   /* Ensure table cells and badges are legible */
   .print\:table th, .print\:table td {
     color: #000 !important; /* Black text for table cells */
+    padding: 4px 6px !important; /* Reduce padding for print */
     border: 1px solid #ccc !important; /* Light gray border for table cells */
   }
-  .print\:table .badge { /* Target badges inside table specifically if needed */
+  .print\:table .badge, .print\:table .ui-badge { /* Target badges */
     background-color: #eee !important; /* Light gray background for badges */
     color: #000 !important; /* Black text for badges */
     border: 1px solid #ddd !important; /* Light border for badges */
+    font-weight: normal !important;
+    padding: 2px 4px !important;
   }
   
-  /* Attempt to make colored text black on print */
-  .text-accent-foreground, .text-destructive {
-    color: #000 !important; /* Overrides specific text colors */
-  }
+  /* Attempt to make colored text black on print or use specific print colors */
+  .text-accent-foreground { color: #047857 !important; /* Print green */ }
+  .text-destructive { color: #b91c1c !important; /* Print red */ }
+
+  /* General text elements for print */
+  h1.print\:text-2xl { font-size: 1.5rem !important; line-height: 2rem !important; }
+  h2.print\:text-xl { font-size: 1.25rem !important; line-height: 1.75rem !important; }
+  p.print\:text-sm { font-size: 0.875rem !important; line-height: 1.25rem !important; }
+  .print\:text-center { text-align: center !important; }
+  .print\:font-bold { font-weight: bold !important; }
+  .print\:font-semibold { font-weight: 600 !important; }
+  .print\:mt-1 { margin-top: 0.25rem !important; }
 }
+

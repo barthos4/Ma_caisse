@@ -1,6 +1,6 @@
 
 "use client";
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
@@ -10,7 +10,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"; // DialogTrigger is not needed if Dialog is controlled by 'open' state
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useTransactions, useCategories } from "@/lib/mock-data";
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
@@ -35,6 +35,11 @@ export default function JournalPage() {
   
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
+  const [currentDate, setCurrentDate] = useState("");
+
+  useEffect(() => {
+    setCurrentDate(format(new Date(), 'dd/MM/yyyy', { locale: fr }));
+  }, []);
 
   const transactions = getTransactions(); 
 
@@ -104,7 +109,7 @@ export default function JournalPage() {
   };
 
   const exportToPDF = () => {
-    const doc = new jsPDF();
+    const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
     const tableColumn = ["Date", "Description", "Catégorie", "Type", "Revenu", "Dépense", "Solde"];
     const tableRows: (string | number)[][] = [];
 
@@ -121,19 +126,42 @@ export default function JournalPage() {
       tableRows.push(entryData);
     });
 
+    // En-tête du document
+    doc.setFontSize(18);
+    doc.text("GESTION CAISSE", doc.internal.pageSize.getWidth() / 2, 15, { align: 'center' });
+    doc.setFontSize(14);
+    doc.text("Journal de Caisse", doc.internal.pageSize.getWidth() / 2, 22, { align: 'center' });
+    doc.setFontSize(10);
+    doc.text(`Date d'export: ${currentDate}`, doc.internal.pageSize.getWidth() / 2, 29, { align: 'center' });
+
     (doc as any).autoTable({
       head: [tableColumn],
       body: tableRows,
-      startY: 20,
+      startY: 35, // Augmenter pour faire de la place à l'en-tête
       theme: 'grid',
-      headStyles: { fillColor: [22, 160, 133] }, // Example header color
-      styles: { font: 'helvetica', fontSize: 8 },
+      headStyles: { fillColor: [22, 160, 133] }, // Vert pour l'en-tête du tableau
+      styles: { font: 'helvetica', fontSize: 8, cellPadding: 1.5, overflow: 'linebreak' },
+      columnStyles: {
+        0: { cellWidth: 20 }, // Date
+        1: { cellWidth: 50 }, // Description
+        2: { cellWidth: 30 }, // Catégorie
+        3: { cellWidth: 20 }, // Type
+        4: { cellWidth: 25, halign: 'right' }, // Revenu
+        5: { cellWidth: 25, halign: 'right' }, // Dépense
+        6: { cellWidth: 25, halign: 'right' }, // Solde
+      }
     });
-    doc.text("Journal de Caisse", 14, 15);
-    doc.save("journal_caisse.pdf");
+    doc.save("journal_caisse_A4.pdf");
   };
 
   const exportToXLSX = () => {
+    const headerData = [
+      { col1: "GESTION CAISSE" }, // Cell A1
+      { col1: "Journal de Caisse" }, // Cell A2
+      { col1: `Date d'export: ${currentDate}` }, // Cell A3
+      {}, // Ligne vide
+    ];
+    
     const worksheetData = journalEntries.map(entry => ({
       Date: format(entry.date, 'yyyy-MM-dd', { locale: fr }),
       Description: entry.description,
@@ -144,16 +172,30 @@ export default function JournalPage() {
       'Solde (F CFA)': entry.balance
     }));
 
-    const worksheet = XLSX.utils.json_to_sheet(worksheetData);
-    const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, worksheet, "Journal");
+    const worksheet = XLSX.utils.json_to_sheet(headerData, {skipHeader: true});
+    XLSX.utils.sheet_add_json(worksheet, worksheetData, {origin: "A5"}); // Start data from row 5 (A5)
     
-    // Set column widths (optional)
+    // Set column widths
     const colWidths = [
         {wch:12}, {wch:40}, {wch:20}, {wch:10}, {wch:15}, {wch:15}, {wch:15}
     ];
     worksheet['!cols'] = colWidths;
 
+    // Merge cells for headers
+    if(!worksheet['!merges']) worksheet['!merges'] = [];
+    // GESTION CAISSE (A1 to G1)
+    worksheet['!merges'].push({s: {r:0, c:0}, e: {r:0, c:6}}); 
+    // Journal de Caisse (A2 to G2)
+    worksheet['!merges'].push({s: {r:1, c:0}, e: {r:1, c:6}}); 
+    // Date d'export (A3 to G3)
+    worksheet['!merges'].push({s: {r:2, c:0}, e: {r:2, c:6}}); 
+    
+    // Style headers (optional, basic example) - XLSX styling is complex
+    // You might need a library like 'xlsx-style' for more advanced styling
+    // This example just sets the values. Alignment/font would be default Excel.
+
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Journal");
     XLSX.writeFile(workbook, "journal_caisse.xlsx");
   };
 
@@ -164,6 +206,14 @@ export default function JournalPage() {
 
   return (
     <div className="space-y-6 print:space-y-2">
+      <div className="print:block hidden my-8">
+        <div className="text-center">
+          <h1 className="text-2xl font-bold text-primary">GESTION CAISSE</h1>
+          <h2 className="text-xl font-semibold mt-1">Journal de Caisse</h2>
+          {currentDate && <p className="text-sm text-muted-foreground mt-1">Imprimé le: {currentDate}</p>}
+        </div>
+      </div>
+      
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 print:hidden">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Journal de Caisse</h1>
@@ -183,7 +233,7 @@ export default function JournalPage() {
               </DropdownMenuItem>
               <DropdownMenuItem onClick={exportToPDF}>
                 <FileText className="mr-2 h-4 w-4" />
-                Exporter en PDF
+                Exporter en PDF (A4)
               </DropdownMenuItem>
               <DropdownMenuItem onClick={exportToXLSX}>
                 <FileSpreadsheet className="mr-2 h-4 w-4" />
@@ -212,7 +262,7 @@ export default function JournalPage() {
         </DialogContent>
       </Dialog>
 
-      <Card className="print:shadow-none print:border-none">
+      <Card className="print:shadow-none print:border-none print:bg-transparent">
         <CardHeader className="print:hidden">
           <CardTitle>Toutes les Transactions</CardTitle>
           <CardDescription>Journal détaillé incluant le solde après chaque transaction.</CardDescription>
@@ -220,36 +270,36 @@ export default function JournalPage() {
         <CardContent className="print:p-0">
           <Table>
             <TableHeader>
-              <TableRow>
-                <TableHead>Date</TableHead>
-                <TableHead>Description</TableHead>
-                <TableHead>Catégorie</TableHead>
-                <TableHead className="text-right">Revenu</TableHead>
-                <TableHead className="text-right">Dépense</TableHead>
-                <TableHead className="text-right">Solde</TableHead>
+              <TableRow className="print:border-b print:border-gray-300">
+                <TableHead className="print:text-black">Date</TableHead>
+                <TableHead className="print:text-black">Description</TableHead>
+                <TableHead className="print:text-black">Catégorie</TableHead>
+                <TableHead className="text-right print:text-black">Revenu</TableHead>
+                <TableHead className="text-right print:text-black">Dépense</TableHead>
+                <TableHead className="text-right print:text-black">Solde</TableHead>
                 <TableHead className="text-right print:hidden">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {journalEntries.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={7} className="text-center text-muted-foreground h-24">
+                  <TableCell colSpan={7} className="text-center text-muted-foreground h-24 print:text-black">
                     Aucune transaction enregistrée pour le moment.
                   </TableCell>
                 </TableRow>
               )}
               {journalEntries.map((entry) => (
-                <TableRow key={entry.id}>
-                  <TableCell>{format(entry.date, 'PP', { locale: fr })}</TableCell>
-                  <TableCell className="font-medium max-w-[200px] truncate print:max-w-none" title={entry.description}>{entry.description}</TableCell>
-                  <TableCell><Badge variant="outline">{entry.categoryName}</Badge></TableCell>
-                  <TableCell className="text-right text-accent-foreground">
+                <TableRow key={entry.id} className="print:border-b print:border-gray-200">
+                  <TableCell className="print:text-black">{format(entry.date, 'PP', { locale: fr })}</TableCell>
+                  <TableCell className="font-medium max-w-[200px] truncate print:max-w-none print:text-black" title={entry.description}>{entry.description}</TableCell>
+                  <TableCell className="print:text-black"><Badge variant="outline" className="print:border-gray-400 print:text-black print:bg-gray-100">{entry.categoryName}</Badge></TableCell>
+                  <TableCell className="text-right text-accent-foreground print:text-green-700">
                     {entry.type === 'income' ? formatCurrencyCFA(entry.amount) : '-'}
                   </TableCell>
-                  <TableCell className="text-right text-destructive">
+                  <TableCell className="text-right text-destructive print:text-red-700">
                     {entry.type === 'expense' ? formatCurrencyCFA(entry.amount) : '-'}
                   </TableCell>
-                  <TableCell className={`text-right font-semibold ${entry.balance >=0 ? 'text-foreground':'text-destructive'}`}>
+                  <TableCell className={`text-right font-semibold ${entry.balance >=0 ? 'text-foreground print:text-black':'text-destructive print:text-red-700'}`}>
                     {formatCurrencyCFA(entry.balance)}
                   </TableCell>
                   <TableCell className="text-right print:hidden">
@@ -269,3 +319,4 @@ export default function JournalPage() {
     </div>
   );
 }
+
