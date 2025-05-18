@@ -5,27 +5,11 @@
 import type { Transaction, Category } from '@/types';
 import { useState, useEffect, useCallback } from 'react';
 
-let nextTransactionId = 4;
-let nextCategoryId = 6;
+let nextTransactionId = 1; // Reset to 1
+let nextCategoryId = 1;    // Reset to 1
 
-const initialTransactions: Transaction[] = [
-  { id: '1', date: new Date('2024-07-28'), description: 'Salaire mensuel', amount: 350000, type: 'income', categoryId: '1' },
-  { id: '2', date: new Date('2024-07-29'), description: 'Courses au SuperMarché', amount: 12050, type: 'expense', categoryId: '2' },
-  { id: '3', date: new Date('2024-07-30'), description: 'Loyer appartement', amount: 120000, type: 'expense', categoryId: '3' },
-  { id: '4', date: new Date('2024-07-30'), description: 'Dîner avec des amis', amount: 6500, type: 'expense', categoryId: '5' },
-  { id: '5', date: new Date('2024-07-31'), description: 'Paiement projet freelance', amount: 50000, type: 'income', categoryId: '7' },
-];
-
-const initialCategories: Category[] = [
-  { id: '1', name: 'Salaire', type: 'income' },
-  { id: '2', name: 'Courses alimentaires', type: 'expense' },
-  { id: '3', name: 'Loyer/Prêt immobilier', type: 'expense' },
-  { id: '4', name: 'Factures (eau, électricité)', type: 'expense' },
-  { id: '5', name: 'Restaurant et sorties', type: 'expense' },
-  { id: '6', name: 'Transport', type: 'expense' },
-  { id: '7', name: 'Freelance', type: 'income' },
-  { id: '8', name: 'Loisirs', type: 'expense' },
-];
+const initialTransactions: Transaction[] = []; // Emptied
+const initialCategories: Category[] = [];   // Emptied
 
 
 // --- Transactions ---

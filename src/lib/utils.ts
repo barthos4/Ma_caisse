@@ -7,8 +7,8 @@ export function cn(...inputs: ClassValue[]) {
 
 export function formatCurrencyCFA(amount: number): string {
   const formattedNumber = amount.toLocaleString('fr-FR', {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
+    minimumFractionDigits: 0, // Changed
+    maximumFractionDigits: 0, // Changed
   });
   return `${formattedNumber} F CFA`;
 }
