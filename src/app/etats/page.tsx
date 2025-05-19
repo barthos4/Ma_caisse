@@ -125,7 +125,7 @@ export default function EtatsPage() {
   const exportToPDF = () => {
     const doc = new jsPDF({ orientation: 'p', unit: 'mm', format: 'a4' });
     const tableCellStyles = { fontSize: 8, cellPadding: 1.5 };
-    const tableHeaderStyles = { fillColor: [220, 220, 220], textColor: [0,0,0], fontStyle: 'bold', fontSize: 8, halign: 'center' };
+    const tableHeaderStyles = { fillColor: [220, 220, 220], textColor: [0,0,0], fontStyle: 'bold', fontSize: 8, halign: 'center' as const };
     
     doc.setFontSize(16);
     doc.text("GESTION CAISSE", doc.internal.pageSize.getWidth() / 2, 15, { align: 'center' });
@@ -153,19 +153,39 @@ export default function EtatsPage() {
       theme: 'grid',
       headStyles: tableHeaderStyles,
       styles: tableCellStyles,
-      columnStyles: { 5: { halign: 'right'}, 4: {halign: 'right'}, 3: {halign: 'right'}, 2: {halign: 'right'}}
+      columnStyles: { 
+        0: { cellWidth: 10, halign: 'center' as const },
+        1: { cellWidth: 50 },
+        2: { cellWidth: 35, halign: 'right' as const },
+        3: { cellWidth: 35, halign: 'right' as const },
+        4: { cellWidth: 20, halign: 'right' as const },
+        5: { cellWidth: 30, halign: 'right' as const }
+      }
     });
     startY = (doc as any).lastAutoTable.finalY + 2;
     (doc as any).autoTable({
       body: [[
-        {content: 'Total Recettes', colSpan: 2, styles: {fontStyle: 'bold', halign: 'left'}}, 
-        {content: formatCurrencyCFA(totalRecettesPrevus).replace(/\u00A0/g, ' '), styles: {fontStyle: 'bold', halign: 'right'}},
-        {content: formatCurrencyCFA(totalRecettesRealisees).replace(/\u00A0/g, ' '), styles: {fontStyle: 'bold', halign: 'right'}},
-        {}, {}
+        {content: 'Total Recettes', colSpan: 2, styles: {fontStyle: 'bold', halign: 'left' as const}}, 
+        {content: formatCurrencyCFA(totalRecettesPrevus).replace(/\u00A0/g, ' '), styles: {fontStyle: 'bold', halign: 'right' as const}},
+        {content: formatCurrencyCFA(totalRecettesRealisees).replace(/\u00A0/g, ' '), styles: {fontStyle: 'bold', halign: 'right' as const}},
+        {content: '', styles: {}}, // Placeholder for % Réal.
+        {content: '', styles: {}}  // Placeholder for Ecart
       ]],
       startY: startY,
       theme: 'grid',
       styles: {...tableCellStyles, fontStyle: 'bold'},
+      columnStyles: { // Ensure columnStyles match the main table for alignment
+        0: { cellWidth: 10 + 50 + 1.5 }, // N° + Types de recettes + padding
+        1: { cellWidth: 35, halign: 'right' as const },
+        2: { cellWidth: 35, halign: 'right' as const },
+        3: { cellWidth: 20 },
+        4: { cellWidth: 30 }
+      },
+      didParseCell: function (data: any) { // Ensure colSpan is applied correctly
+        if (data.row.index === 0 && data.cell.raw.content === 'Total Recettes') {
+             data.cell.colSpan = 2;
+        }
+      }
     });
     startY = (doc as any).lastAutoTable.finalY + 8;
 
@@ -186,34 +206,56 @@ export default function EtatsPage() {
       theme: 'grid',
       headStyles: tableHeaderStyles,
       styles: tableCellStyles,
-      columnStyles: { 5: { halign: 'right'}, 4: {halign: 'right'}, 3: {halign: 'right'}, 2: {halign: 'right'}}
+      columnStyles: { 
+        0: { cellWidth: 10, halign: 'center' as const },
+        1: { cellWidth: 50 },
+        2: { cellWidth: 35, halign: 'right' as const },
+        3: { cellWidth: 35, halign: 'right' as const },
+        4: { cellWidth: 20, halign: 'right' as const },
+        5: { cellWidth: 30, halign: 'right' as const }
+      }
     });
     startY = (doc as any).lastAutoTable.finalY + 2;
     (doc as any).autoTable({
       body: [[
-        {content: 'Total Dépenses', colSpan: 2, styles: {fontStyle: 'bold', halign: 'left'}}, 
-        {content: formatCurrencyCFA(totalDepensesPrevus).replace(/\u00A0/g, ' '), styles: {fontStyle: 'bold', halign: 'right'}},
-        {content: formatCurrencyCFA(totalDepensesRealisees).replace(/\u00A0/g, ' '), styles: {fontStyle: 'bold', halign: 'right'}},
-        {}, {}
+        {content: 'Total Dépenses', colSpan: 2, styles: {fontStyle: 'bold', halign: 'left' as const}}, 
+        {content: formatCurrencyCFA(totalDepensesPrevus).replace(/\u00A0/g, ' '), styles: {fontStyle: 'bold', halign: 'right' as const}},
+        {content: formatCurrencyCFA(totalDepensesRealisees).replace(/\u00A0/g, ' '), styles: {fontStyle: 'bold', halign: 'right' as const}},
+        {content: '', styles: {}}, // Placeholder for % Réal.
+        {content: '', styles: {}}  // Placeholder for Ecart
       ]],
       startY: startY,
       theme: 'grid',
       styles: {...tableCellStyles, fontStyle: 'bold'},
+      columnStyles: { 
+        0: { cellWidth: 10 + 50 + 1.5 }, 
+        1: { cellWidth: 35, halign: 'right' as const },
+        2: { cellWidth: 35, halign: 'right' as const },
+        3: { cellWidth: 20 },
+        4: { cellWidth: 30 }
+      },
+      didParseCell: function (data: any) {
+        if (data.row.index === 0 && data.cell.raw.content === 'Total Dépenses') {
+             data.cell.colSpan = 2;
+        }
+      }
     });
     startY = (doc as any).lastAutoTable.finalY + 8;
     
     doc.setFontSize(10);
     (doc as any).autoTable({
         body: [
-            [{ content: 'BALANCE', styles: { fontStyle: 'bold', halign: 'left', cellWidth: 60 } },
-             { content: `Total Recettes: ${formatCurrencyCFA(totalRecettesRealisees).replace(/\u00A0/g, ' ')}`, styles: {halign: 'right'} },
-             { content: `Total Dépenses: ${formatCurrencyCFA(totalDepensesRealisees).replace(/\u00A0/g, ' ')}`, styles: {halign: 'right'} },
-             { content: `Solde: ${formatCurrencyCFA(soldeRealise).replace(/\u00A0/g, ' ')}`, styles: { fontStyle: 'bold', halign: 'right'} },
+            [
+             { content: 'BALANCE', styles: { fontStyle: 'bold', halign: 'left' as const, cellWidth: 45 } }, // Adjusted width
+             { content: `Total Recettes: ${formatCurrencyCFA(totalRecettesRealisees).replace(/\u00A0/g, ' ')}`, styles: {halign: 'right' as const, cellWidth: 50} },
+             { content: `Total Dépenses: ${formatCurrencyCFA(totalDepensesRealisees).replace(/\u00A0/g, ' ')}`, styles: {halign: 'right' as const, cellWidth: 50} },
+             { content: `Solde: ${formatCurrencyCFA(soldeRealise).replace(/\u00A0/g, ' ')}`, styles: { fontStyle: 'bold', halign: 'right' as const, cellWidth: 35} },
             ]
         ],
         startY: startY,
-        theme: 'plain',
+        theme: 'plain', // 'plain' for no borders, 'grid' for borders
         styles: {...tableCellStyles, fontStyle: 'bold'},
+        tableWidth: 'auto' // Or specify a width doc.internal.pageSize.getWidth() - 28
     });
 
     doc.save(`etat_de_caisse_A4.pdf`);
@@ -259,39 +301,55 @@ export default function EtatsPage() {
 
     const wsSummary = [
       {}, // Empty row for spacing
-      { col1: "BALANCE", col2: "TOTAL RECETTES", col3: "TOTAL DEPENSES", col4: "SOLDE" },
-      { col1: "", col2: totalRecettesRealisees, col3: totalDepensesRealisees, col4: soldeRealise }
+      { col1: "BALANCE" }, // Title in its own row
+      { col1: "Total Recettes", col2: totalRecettesRealisees },
+      { col1: "Total Dépenses", col2: totalDepensesRealisees },
+      { col1: "Solde", col2: soldeRealise }
     ];
 
     const ws = XLSX.utils.json_to_sheet(headerXlsx, {skipHeader: true});
     XLSX.utils.sheet_add_aoa(ws, [["I- Les Recettes"]], {origin: "A5"});
     XLSX.utils.sheet_add_json(ws, wsDataRecettes, {origin: "A6", skipHeader: false});
     const recettesEndRow = 6 + wsDataRecettes.length;
-    XLSX.utils.sheet_add_aoa(ws, [["II- Les Dépenses"]], {origin: {r: recettesEndRow + 1, c: 0}}); // A + recettesEndRow + 2
-    XLSX.utils.sheet_add_json(ws, wsDataDepenses, {origin: {r: recettesEndRow + 2, c: 0}, skipHeader: false}); // A + recettesEndRow + 3
+    XLSX.utils.sheet_add_aoa(ws, [["II- Les Dépenses"]], {origin: {r: recettesEndRow + 1, c: 0}}); 
+    XLSX.utils.sheet_add_json(ws, wsDataDepenses, {origin: {r: recettesEndRow + 2, c: 0}, skipHeader: false}); 
     const depensesEndRow = recettesEndRow + 2 + wsDataDepenses.length;
     XLSX.utils.sheet_add_json(ws, wsSummary, {origin: {r: depensesEndRow + 1, c:0}, skipHeader: true});
 
-    // Basic styling (column widths, number formats)
+
     ws['!cols'] = [{wch:5}, {wch:30}, {wch:15}, {wch:15}, {wch:10}, {wch:15}];
-    // Apply number formats
+    
+    const currencyFormat = '#,##0 "F CFA"';
+    const percentageFormat = '0%';
+
     wsDataRecettes.forEach((_row, i) => {
-        ['C','D','F'].forEach(col => ws[`${col}${7+i}`] ? ws[`${col}${7+i}`].z = '#,##0 "F CFA"' : null);
-        ws[`E${7+i}`] ? ws[`E${7+i}`].z = '0%' : null;
+        const rowIndex = 7 + i;
+        if (ws[`C${rowIndex}`]) ws[`C${rowIndex}`].z = currencyFormat;
+        if (ws[`D${rowIndex}`]) ws[`D${rowIndex}`].z = currencyFormat;
+        if (ws[`E${rowIndex}`] && _row["% Réal."] !== null) ws[`E${rowIndex}`].z = percentageFormat;
+        if (ws[`F${rowIndex}`] && _row["Ecart"] !== null) ws[`F${rowIndex}`].z = currencyFormat;
     });
      wsDataDepenses.forEach((_row, i) => {
-        ['C','D','F'].forEach(col => ws[`${col}${recettesEndRow + 3 + i}`] ? ws[`${col}${recettesEndRow + 3 + i}`].z = '#,##0 "F CFA"' : null);
-        ws[`E${recettesEndRow + 3 + i}`] ? ws[`E${recettesEndRow + 3 + i}`].z = '0%' : null;
+        const rowIndex = recettesEndRow + 3 + i;
+        if (ws[`C${rowIndex}`]) ws[`C${rowIndex}`].z = currencyFormat;
+        if (ws[`D${rowIndex}`]) ws[`D${rowIndex}`].z = currencyFormat;
+        if (ws[`E${rowIndex}`] && _row["% Réal."] !== null) ws[`E${rowIndex}`].z = percentageFormat;
+        if (ws[`F${rowIndex}`] && _row["Ecart"] !== null) ws[`F${rowIndex}`].z = currencyFormat;
     });
-    ['B','C','D'].forEach(col => ws[`${col}${depensesEndRow + 3}`] ? ws[`${col}${depensesEndRow + 3}`].z = '#,##0 "F CFA"' : null);
-
+    
+    // Format summary section
+    const summaryStartRow = depensesEndRow + 3;
+    if (ws[`B${summaryStartRow}`]) ws[`B${summaryStartRow}`].z = currencyFormat;
+    if (ws[`B${summaryStartRow + 1}`]) ws[`B${summaryStartRow + 1}`].z = currencyFormat;
+    if (ws[`B${summaryStartRow + 2}`]) ws[`B${summaryStartRow + 2}`].z = currencyFormat;
 
     if(!ws['!merges']) ws['!merges'] = [];
     ws['!merges'].push({s: {r:0, c:0}, e: {r:0, c:5}}); 
     ws['!merges'].push({s: {r:1, c:0}, e: {r:1, c:5}}); 
     ws['!merges'].push({s: {r:2, c:0}, e: {r:2, c:5}});
-    ws['!merges'].push({s: {r:4, c:0}, e: {r:4, c:5}}); // Title I- Les Recettes
-    ws['!merges'].push({s: {r:recettesEndRow + 1, c:0}, e: {r:recettesEndRow + 1, c:5}}); // Title II- Les Dépenses
+    ws['!merges'].push({s: {r:4, c:0}, e: {r:4, c:5}}); 
+    ws['!merges'].push({s: {r:recettesEndRow + 1, c:0}, e: {r:recettesEndRow + 1, c:5}}); 
+    ws['!merges'].push({s: {r:depensesEndRow + 1, c:0}, e: {r:depensesEndRow + 1, c:5}}); // Merge for "BALANCE" title
     
     XLSX.utils.book_append_sheet(wb, ws, "Etat de Caisse");
     XLSX.writeFile(wb, "etat_de_caisse.xlsx");
@@ -453,3 +511,4 @@ export default function EtatsPage() {
     </div>
   );
 }
+
