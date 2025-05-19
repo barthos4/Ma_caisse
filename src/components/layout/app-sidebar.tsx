@@ -13,22 +13,24 @@ import {
   SidebarTrigger,
 } from '@/components/ui/sidebar';
 import { Separator } from '@/components/ui/separator';
-import { Home, ArrowLeftRight, LayoutGrid, BarChart3, BookText, Settings, LogOut, Briefcase, ClipboardList } from 'lucide-react'; // Added ClipboardList
+import { Home, ArrowLeftRight, LayoutGrid, BarChart3, BookText, Settings, LogOut, Briefcase, ClipboardList } from 'lucide-react';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { ThemeSwitcher } from '@/components/theme-switcher';
+import { useAuth } from '@/hooks/use-auth'; // Import useAuth
 
 const navItems = [
   { href: '/', label: 'Tableau de Bord', icon: Home },
   { href: '/transactions', label: 'Transactions', icon: ArrowLeftRight },
   { href: '/categories', label: 'Catégories', icon: LayoutGrid },
   { href: '/reports', label: 'Rapports', icon: BarChart3 },
-  { href: '/etats', label: 'Etats de Caisse', icon: ClipboardList }, // Added new Etat item
+  { href: '/etats', label: 'Etats de Caisse', icon: ClipboardList },
   { href: '/journal', label: 'Journal de Caisse', icon: BookText },
 ];
 
 export function AppSidebar() {
   const pathname = usePathname();
   const isMobile = useIsMobile();
+  const { logout } = useAuth(); // Get logout function
 
   return (
     <Sidebar collapsible={isMobile ? "offcanvas" : "icon"} className="print:hidden">
@@ -65,13 +67,19 @@ export function AppSidebar() {
              <ThemeSwitcher />
           </SidebarMenuItem>
           <SidebarMenuItem>
-            <SidebarMenuButton tooltip="Paramètres" className="group-data-[collapsible=icon]:justify-center">
-              <Settings className="h-5 w-5 shrink-0" />
-              <span className="group-data-[collapsible=icon]:hidden">Paramètres</span>
-            </SidebarMenuButton>
+            <Link href="/settings" passHref legacyBehavior>
+              <SidebarMenuButton tooltip="Paramètres" className="group-data-[collapsible=icon]:justify-center">
+                <Settings className="h-5 w-5 shrink-0" />
+                <span className="group-data-[collapsible=icon]:hidden">Paramètres</span>
+              </SidebarMenuButton>
+            </Link>
           </SidebarMenuItem>
           <SidebarMenuItem>
-            <SidebarMenuButton tooltip="Déconnexion" className="group-data-[collapsible=icon]:justify-center">
+            <SidebarMenuButton 
+              tooltip="Déconnexion" 
+              className="group-data-[collapsible=icon]:justify-center"
+              onClick={logout} // Call logout function on click
+            >
               <LogOut className="h-5 w-5 shrink-0" />
               <span className="group-data-[collapsible=icon]:hidden">Déconnexion</span>
             </SidebarMenuButton>
