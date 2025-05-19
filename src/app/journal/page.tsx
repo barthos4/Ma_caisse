@@ -45,6 +45,7 @@ export default function JournalPage() {
 
   const journalEntries = useMemo(() => {
     let runningBalance = 0;
+    // Trie les transactions : la plus ancienne en premier
     return transactions
       .slice() 
       .sort((a, b) => a.date.getTime() - b.date.getTime()) 
@@ -59,8 +60,8 @@ export default function JournalPage() {
           categoryName: getCategoryById(t.categoryId)?.name || 'Non classé(e)',
           balance: runningBalance,
         };
-      })
-      .reverse(); 
+      });
+      // .reverse(); // Supprimé pour que le plus ancien soit en haut
   }, [transactions, getCategoryById]);
 
   const handleEditTransaction = (transaction: Transaction) => {
@@ -76,7 +77,10 @@ export default function JournalPage() {
 
   const exportToCSV = () => {
     const headers = ["Date", "Description", "Catégorie", "Type", "Revenu (F CFA)", "Dépense (F CFA)", "Solde (F CFA)"];
-    const rows = journalEntries.map(entry => {
+    // Pour le CSV, il est souvent préférable de garder l'ordre d'affichage (plus ancien en haut)
+    const entriesToExport = [...journalEntries]; // Pas besoin de .reverse() ici
+
+    const rows = entriesToExport.map(entry => {
       const income = entry.type === 'income' ? entry.amount : 0;
       const expense = entry.type === 'expense' ? entry.amount : 0;
       const descriptionCSV = `"${String(entry.description || '').replace(/"/g, '""')}"`;
@@ -87,9 +91,9 @@ export default function JournalPage() {
         descriptionCSV,
         categoryNameCSV,
         entry.type === 'income' ? 'Revenu' : 'Dépense',
-        income.toFixed(2),
-        expense.toFixed(2),
-        entry.balance.toFixed(2)
+        income.toFixed(0),
+        expense.toFixed(0),
+        entry.balance.toFixed(0)
       ].join(',');
     });
 
@@ -112,7 +116,8 @@ export default function JournalPage() {
     const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
     const tableColumn = ["Date", "Description", "Catégorie", "Type", "Revenu", "Dépense", "Solde"];
     const tableRows: (string | number)[][] = [];
-
+    
+    // Utilise journalEntries directement (plus ancien en haut)
     journalEntries.forEach(entry => {
       const entryData = [
         format(entry.date, 'dd/MM/yyyy', { locale: fr }),
@@ -137,9 +142,9 @@ export default function JournalPage() {
     (doc as any).autoTable({
       head: [tableColumn],
       body: tableRows,
-      startY: 35, // Augmenter pour faire de la place à l'en-tête
+      startY: 35, 
       theme: 'grid',
-      headStyles: { fillColor: [22, 160, 133] }, // Vert pour l'en-tête du tableau
+      headStyles: { fillColor: [22, 160, 133] }, 
       styles: { font: 'helvetica', fontSize: 8, cellPadding: 1.5, overflow: 'linebreak' },
       columnStyles: {
         0: { cellWidth: 20 }, // Date
@@ -156,12 +161,13 @@ export default function JournalPage() {
 
   const exportToXLSX = () => {
     const headerData = [
-      { col1: "GESTION CAISSE" }, // Cell A1
-      { col1: "Journal de Caisse" }, // Cell A2
-      { col1: `Date d'export: ${currentDate}` }, // Cell A3
-      {}, // Ligne vide
+      { col1: "GESTION CAISSE" }, 
+      { col1: "Journal de Caisse" }, 
+      { col1: `Date d'export: ${currentDate}` }, 
+      {}, 
     ];
     
+    // Utilise journalEntries directement (plus ancien en haut)
     const worksheetData = journalEntries.map(entry => ({
       Date: format(entry.date, 'yyyy-MM-dd', { locale: fr }),
       Description: entry.description,
@@ -173,27 +179,18 @@ export default function JournalPage() {
     }));
 
     const worksheet = XLSX.utils.json_to_sheet(headerData, {skipHeader: true});
-    XLSX.utils.sheet_add_json(worksheet, worksheetData, {origin: "A5"}); // Start data from row 5 (A5)
+    XLSX.utils.sheet_add_json(worksheet, worksheetData, {origin: "A5"}); 
     
-    // Set column widths
     const colWidths = [
         {wch:12}, {wch:40}, {wch:20}, {wch:10}, {wch:15}, {wch:15}, {wch:15}
     ];
     worksheet['!cols'] = colWidths;
 
-    // Merge cells for headers
     if(!worksheet['!merges']) worksheet['!merges'] = [];
-    // GESTION CAISSE (A1 to G1)
     worksheet['!merges'].push({s: {r:0, c:0}, e: {r:0, c:6}}); 
-    // Journal de Caisse (A2 to G2)
     worksheet['!merges'].push({s: {r:1, c:0}, e: {r:1, c:6}}); 
-    // Date d'export (A3 to G3)
     worksheet['!merges'].push({s: {r:2, c:0}, e: {r:2, c:6}}); 
     
-    // Style headers (optional, basic example) - XLSX styling is complex
-    // You might need a library like 'xlsx-style' for more advanced styling
-    // This example just sets the values. Alignment/font would be default Excel.
-
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, "Journal");
     XLSX.writeFile(workbook, "journal_caisse.xlsx");
@@ -208,9 +205,9 @@ export default function JournalPage() {
     <div className="space-y-6 print:space-y-2">
       <div className="print:block hidden my-8">
         <div className="text-center">
-          <h1 className="text-2xl font-bold text-primary">GESTION CAISSE</h1>
-          <h2 className="text-xl font-semibold mt-1">Journal de Caisse</h2>
-          {currentDate && <p className="text-sm text-muted-foreground mt-1">Imprimé le: {currentDate}</p>}
+          <h1 className="text-2xl font-bold text-primary print:text-black">GESTION CAISSE</h1>
+          <h2 className="text-xl font-semibold mt-1 print:text-black">Journal de Caisse</h2>
+          {currentDate && <p className="text-sm text-muted-foreground mt-1 print:text-black">Imprimé le: {currentDate}</p>}
         </div>
       </div>
       
@@ -265,7 +262,7 @@ export default function JournalPage() {
       <Card className="print:shadow-none print:border-none print:bg-transparent">
         <CardHeader className="print:hidden">
           <CardTitle>Toutes les Transactions</CardTitle>
-          <CardDescription>Journal détaillé incluant le solde après chaque transaction.</CardDescription>
+          <CardDescription>Journal détaillé incluant le solde après chaque transaction, du plus ancien au plus récent.</CardDescription>
         </CardHeader>
         <CardContent className="print:p-0">
           <Table>
