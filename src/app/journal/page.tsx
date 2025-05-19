@@ -19,6 +19,7 @@ import { formatCurrencyCFA } from "@/lib/utils";
 import { ChevronDown, Download, Edit2, Printer, Trash2, FileText, FileSpreadsheet } from "lucide-react";
 import type { Transaction } from "@/types";
 import { TransactionForm } from "@/app/transactions/transaction-form"; 
+import { useSettings } from "@/hooks/use-settings"; // Import useSettings
 
 import jsPDF from 'jspdf';
 import 'jspdf-autotable';
@@ -32,6 +33,7 @@ interface JournalEntry extends Transaction {
 export default function JournalPage() {
   const { getTransactions, deleteTransaction } = useTransactions();
   const { getCategoryById } = useCategories();
+  const { settings, isLoading: isLoadingSettings } = useSettings(); // Use settings hook
   
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
@@ -114,6 +116,7 @@ export default function JournalPage() {
   };
 
   const exportToPDF = () => {
+    if (isLoadingSettings) return; // Wait for settings to load
     const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' }); 
     const tableColumn = ["N° Ord.", "Date", "Description", "Réf.", "Catégorie", "Type", "Revenu", "Dépense", "Solde"];
     const tableRows: (string | number)[][] = [];
@@ -133,19 +136,23 @@ export default function JournalPage() {
       tableRows.push(entryData);
     });
 
-    doc.setFontSize(18);
-    doc.text("GESTION CAISSE", doc.internal.pageSize.getWidth() / 2, 15, { align: 'center' });
     doc.setFontSize(14);
+    doc.text(settings.companyName || "GESTION CAISSE", doc.internal.pageSize.getWidth() / 2, 10, { align: 'center' });
+    if (settings.companyAddress) {
+      doc.setFontSize(8);
+      doc.text(settings.companyAddress, doc.internal.pageSize.getWidth() / 2, 15, { align: 'center' });
+    }
+    doc.setFontSize(12);
     doc.text("Journal de Caisse", doc.internal.pageSize.getWidth() / 2, 22, { align: 'center' });
-    doc.setFontSize(10);
-    doc.text(`Date d'export: ${currentDate}`, doc.internal.pageSize.getWidth() / 2, 29, { align: 'center' });
+    doc.setFontSize(9);
+    doc.text(`Date d'export: ${currentDate}`, doc.internal.pageSize.getWidth() / 2, 27, { align: 'center' });
 
     (doc as any).autoTable({
       head: [tableColumn],
       body: tableRows,
-      startY: 35, 
+      startY: 32, 
       theme: 'grid',
-      headStyles: { fillColor: [22, 160, 133], fontSize: 7 }, 
+      headStyles: { fillColor: [22, 160, 133], fontSize: 7, textColor: [255,255,255] }, 
       styles: { font: 'helvetica', fontSize: 7, cellPadding: 1, overflow: 'linebreak' }, 
       columnStyles: {
         0: { cellWidth: 15 }, 
@@ -154,20 +161,22 @@ export default function JournalPage() {
         3: { cellWidth: 20 }, 
         4: { cellWidth: 30 }, 
         5: { cellWidth: 18 }, 
-        6: { cellWidth: 25, halign: 'right' }, 
-        7: { cellWidth: 25, halign: 'right' }, 
-        8: { cellWidth: 25, halign: 'right' }, 
+        6: { cellWidth: 25, halign: 'right' as const }, 
+        7: { cellWidth: 25, halign: 'right' as const }, 
+        8: { cellWidth: 25, halign: 'right' as const }, 
       }
     });
     doc.save("journal_caisse_A4.pdf");
   };
 
   const exportToXLSX = () => {
-    const headerData = [
-      { col1: "GESTION CAISSE" }, 
-      { col1: "Journal de Caisse" }, 
-      { col1: `Date d'export: ${currentDate}` }, 
-      {}, 
+    if (isLoadingSettings) return;
+    const headerXlsx = [
+      { col1: settings.companyName || "GESTION CAISSE" },
+      ...(settings.companyAddress ? [{ col1: settings.companyAddress }] : []),
+      { col1: "Journal de Caisse" },
+      { col1: `Date d'export: ${currentDate}` },
+      {}, // Empty row for spacing
     ];
     
     const worksheetData = journalEntries.map(entry => ({
@@ -182,8 +191,8 @@ export default function JournalPage() {
       'Solde (F CFA)': entry.balance
     }));
 
-    const worksheet = XLSX.utils.json_to_sheet(headerData, {skipHeader: true});
-    XLSX.utils.sheet_add_json(worksheet, worksheetData, {origin: "A5"}); 
+    const worksheet = XLSX.utils.json_to_sheet(headerXlsx, {skipHeader: true});
+    XLSX.utils.sheet_add_json(worksheet, worksheetData, {origin: `A${headerXlsx.length +1}`}); 
     
     const colWidths = [
         {wch:10}, {wch:12}, {wch:40}, {wch:15}, {wch:20}, {wch:10}, {wch:15}, {wch:15}, {wch:15}
@@ -192,28 +201,48 @@ export default function JournalPage() {
 
     if(!worksheet['!merges']) worksheet['!merges'] = [];
     worksheet['!merges'].push({s: {r:0, c:0}, e: {r:0, c:8}}); 
-    worksheet['!merges'].push({s: {r:1, c:0}, e: {r:1, c:8}}); 
-    worksheet['!merges'].push({s: {r:2, c:0}, e: {r:2, c:8}}); 
+    if (settings.companyAddress) {
+      worksheet['!merges'].push({s: {r:1, c:0}, e: {r:1, c:8}}); 
+      worksheet['!merges'].push({s: {r:2, c:0}, e: {r:2, c:8}});
+      worksheet['!merges'].push({s: {r:3, c:0}, e: {r:3, c:8}});
+    } else {
+      worksheet['!merges'].push({s: {r:1, c:0}, e: {r:1, c:8}});
+      worksheet['!merges'].push({s: {r:2, c:0}, e: {r:2, c:8}});
+    }
     
+    // Apply currency format
+    const currencyFormat = '#,##0 "F CFA"';
+    const firstDataRow = headerXlsx.length + 2; // +1 for headers of data, +1 to start from first data row
+    for (let i = 0; i < worksheetData.length; i++) {
+        const rowIndex = firstDataRow + i;
+        if (worksheet[`G${rowIndex}`]) worksheet[`G${rowIndex}`].z = currencyFormat; // Revenu
+        if (worksheet[`H${rowIndex}`]) worksheet[`H${rowIndex}`].z = currencyFormat; // Dépense
+        if (worksheet[`I${rowIndex}`]) worksheet[`I${rowIndex}`].z = currencyFormat; // Solde
+    }
+
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, "Journal");
     XLSX.writeFile(workbook, "journal_caisse.xlsx");
   };
 
   const handlePrint = () => {
+    if (isLoadingSettings) return;
     window.print();
   };
+
+  const printHeader = (
+    <div className="print:block hidden my-6 text-center">
+      <h1 className="text-xl font-bold text-primary print:text-black">{settings.companyName || "GESTION CAISSE"}</h1>
+      {settings.companyAddress && <p className="text-sm print:text-black">{settings.companyAddress}</p>}
+      <h2 className="text-lg font-semibold mt-1 print:text-black">Journal de Caisse</h2>
+      {currentDate && <p className="text-xs text-muted-foreground mt-1 print:text-black">Imprimé le: {currentDate}</p>}
+    </div>
+  );
 
 
   return (
     <div className="space-y-6 print:space-y-2">
-      <div className="print:block hidden my-8">
-        <div className="text-center">
-          <h1 className="text-2xl font-bold text-primary print:text-black">GESTION CAISSE</h1>
-          <h2 className="text-xl font-semibold mt-1 print:text-black">Journal de Caisse</h2>
-          {currentDate && <p className="text-sm text-muted-foreground mt-1 print:text-black">Imprimé le: {currentDate}</p>}
-        </div>
-      </div>
+      {printHeader}
       
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 print:hidden">
         <div>
@@ -223,26 +252,26 @@ export default function JournalPage() {
         <div className="flex gap-2 w-full sm:w-auto">
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button className="w-full sm:w-auto">
+              <Button className="w-full sm:w-auto" disabled={isLoadingSettings}>
                 <Download className="mr-2 h-4 w-4" /> Exporter <ChevronDown className="ml-2 h-4 w-4" />
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
-              <DropdownMenuItem onClick={exportToCSV}>
+              <DropdownMenuItem onClick={exportToCSV} disabled={isLoadingSettings}>
                 <FileText className="mr-2 h-4 w-4" />
                 Exporter en CSV
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={exportToPDF}>
+              <DropdownMenuItem onClick={exportToPDF} disabled={isLoadingSettings}>
                 <FileText className="mr-2 h-4 w-4" />
                 Exporter en PDF (A4)
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={exportToXLSX}>
+              <DropdownMenuItem onClick={exportToXLSX} disabled={isLoadingSettings}>
                 <FileSpreadsheet className="mr-2 h-4 w-4" />
                 Exporter en XLSX
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
-          <Button onClick={handlePrint} variant="outline" className="w-full sm:w-auto">
+          <Button onClick={handlePrint} variant="outline" className="w-full sm:w-auto" disabled={isLoadingSettings}>
             <Printer className="mr-2 h-4 w-4" /> Imprimer
           </Button>
         </div>
@@ -251,7 +280,7 @@ export default function JournalPage() {
       <Dialog open={isFormOpen} onOpenChange={setIsFormOpen}>
         <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto print:hidden">
           <DialogHeader>
-            <DialogTitle>Modifier la Transaction</DialogTitle>
+            <DialogTitle>{editingTransaction ? "Modifier" : "Ajouter"} la Transaction</DialogTitle>
           </DialogHeader>
           <TransactionForm 
             transactionToEdit={editingTransaction} 

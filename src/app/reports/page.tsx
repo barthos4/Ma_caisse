@@ -9,7 +9,7 @@ import type { Transaction, Category } from "@/types";
 import { DateRange } from "react-day-picker";
 import { format, startOfMonth, endOfMonth, subMonths, startOfWeek, endOfWeek, subWeeks, startOfDay, endOfDay, subDays, isSameDay } from "date-fns";
 import { fr } from 'date-fns/locale';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
+import { Bar, XAxis, YAxis, CartesianGrid, Pie, Cell } from 'recharts'; // Removed BarChart, PieChart, Tooltip, Legend, ResponsiveContainer
 import { formatCurrencyCFA } from "@/lib/utils";
 import {
   ChartContainer,
@@ -28,6 +28,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { useSettings } from "@/hooks/use-settings"; // Import useSettings
 
 import jsPDF from 'jspdf';
 import 'jspdf-autotable';
@@ -36,6 +37,7 @@ import * as XLSX from 'xlsx';
 export default function ReportsPage() {
   const { getTransactions } = useTransactions();
   const { getCategories, getCategoryById } = useCategories();
+  const { settings, isLoading: isLoadingSettings } = useSettings(); // Use settings hook
   const allTransactions = getTransactions();
   const allCategories = getCategories();
 
@@ -206,14 +208,15 @@ export default function ReportsPage() {
   };
 
   const exportDetailedToPDF = () => {
-    const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' }); // Changed to landscape
+    if (isLoadingSettings) return;
+    const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' }); 
     const tableColumn = ["N° Ord.", "Date", "Description", "Réf.", "Catégorie", "Type", "Montant"];
     const tableRows: (string | number)[][] = [];
 
     filteredTransactions.forEach(t => {
       const entryData = [
         t.orderNumber || '-',
-        format(t.date, 'dd/MM/yy', { locale: fr }), // Shorter date
+        format(t.date, 'dd/MM/yy', { locale: fr }), 
         t.description,
         t.reference || '-',
         getCategoryById(t.categoryId)?.name || 'Non classé(e)',
@@ -223,36 +226,42 @@ export default function ReportsPage() {
       tableRows.push(entryData);
     });
 
-    doc.setFontSize(18);
-    doc.text("GESTION CAISSE", doc.internal.pageSize.getWidth() / 2, 15, { align: 'center' });
     doc.setFontSize(14);
+    doc.text(settings.companyName || "GESTION CAISSE", doc.internal.pageSize.getWidth() / 2, 10, { align: 'center' });
+    if (settings.companyAddress) {
+      doc.setFontSize(8);
+      doc.text(settings.companyAddress, doc.internal.pageSize.getWidth() / 2, 15, { align: 'center' });
+    }
+    doc.setFontSize(12);
     doc.text(reportTitle, doc.internal.pageSize.getWidth() / 2, 22, { align: 'center' });
-    doc.setFontSize(10);
-    doc.text(`Date d'export: ${currentPrintDate}`, doc.internal.pageSize.getWidth() / 2, 29, { align: 'center' });
+    doc.setFontSize(9);
+    doc.text(`Date d'export: ${currentPrintDate}`, doc.internal.pageSize.getWidth() / 2, 27, { align: 'center' });
 
     (doc as any).autoTable({
       head: [tableColumn],
       body: tableRows,
-      startY: 35,
+      startY: 32,
       theme: 'grid',
-      headStyles: { fillColor: [22, 160, 133], fontSize: 7 }, // Reduced font size
-      styles: { font: 'helvetica', fontSize: 7, cellPadding: 1, overflow: 'linebreak' }, // Reduced font size
+      headStyles: { fillColor: [22, 160, 133], fontSize: 7, textColor: [255,255,255] }, 
+      styles: { font: 'helvetica', fontSize: 7, cellPadding: 1, overflow: 'linebreak' }, 
       columnStyles: {
-        0: { cellWidth: 15 }, // N° Ordre
-        1: { cellWidth: 18 }, // Date
-        2: { cellWidth: 'auto' }, // Description
-        3: { cellWidth: 20 }, // Référence
-        4: { cellWidth: 35 }, // Catégorie
-        5: { cellWidth: 20 }, // Type
-        6: { cellWidth: 30, halign: 'right' }, // Montant
+        0: { cellWidth: 15 }, 
+        1: { cellWidth: 18 }, 
+        2: { cellWidth: 'auto' }, 
+        3: { cellWidth: 20 }, 
+        4: { cellWidth: 35 }, 
+        5: { cellWidth: 20 }, 
+        6: { cellWidth: 30, halign: 'right' as const }, 
       }
     });
     doc.save("rapport_transactions_detaillees_A4.pdf");
   };
 
   const exportDetailedToXLSX = () => {
-    const headerData = [
-      { col1: "GESTION CAISSE" },
+    if (isLoadingSettings) return;
+    const headerXlsx = [
+      { col1: settings.companyName || "GESTION CAISSE" },
+      ...(settings.companyAddress ? [{ col1: settings.companyAddress }] : []),
       { col1: reportTitle },
       { col1: `Date d'export: ${currentPrintDate}` },
       {}, 
@@ -268,16 +277,30 @@ export default function ReportsPage() {
       'Montant (F CFA)': t.amount
     }));
 
-    const worksheet = XLSX.utils.json_to_sheet(headerData, {skipHeader: true});
-    XLSX.utils.sheet_add_json(worksheet, worksheetData, {origin: "A5"}); 
+    const worksheet = XLSX.utils.json_to_sheet(headerXlsx, {skipHeader: true});
+    XLSX.utils.sheet_add_json(worksheet, worksheetData, {origin: `A${headerXlsx.length + 1}`}); 
     
     const colWidths = [ {wch:10}, {wch:12}, {wch:40}, {wch:15}, {wch:25}, {wch:15}, {wch:20} ];
     worksheet['!cols'] = colWidths;
 
     if(!worksheet['!merges']) worksheet['!merges'] = [];
     worksheet['!merges'].push({s: {r:0, c:0}, e: {r:0, c:6}}); 
-    worksheet['!merges'].push({s: {r:1, c:0}, e: {r:1, c:6}}); 
-    worksheet['!merges'].push({s: {r:2, c:0}, e: {r:2, c:6}}); 
+    if (settings.companyAddress) {
+      worksheet['!merges'].push({s: {r:1, c:0}, e: {r:1, c:6}}); 
+      worksheet['!merges'].push({s: {r:2, c:0}, e: {r:2, c:6}}); 
+      worksheet['!merges'].push({s: {r:3, c:0}, e: {r:3, c:6}}); 
+    } else {
+      worksheet['!merges'].push({s: {r:1, c:0}, e: {r:1, c:6}}); 
+      worksheet['!merges'].push({s: {r:2, c:0}, e: {r:2, c:6}}); 
+    }
+
+     // Apply currency format
+    const currencyFormat = '#,##0 "F CFA"';
+    const firstDataRowXlsx = headerXlsx.length + 2;
+    for (let i = 0; i < worksheetData.length; i++) {
+        const rowIndex = firstDataRowXlsx + i;
+        if (worksheet[`G${rowIndex}`]) worksheet[`G${rowIndex}`].z = currencyFormat;
+    }
     
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, "Rapport Détail");
@@ -285,9 +308,18 @@ export default function ReportsPage() {
   };
 
   const handlePrintDetailed = () => {
+    if (isLoadingSettings) return;
     window.print();
   };
 
+  const printHeader = (
+    <div className="print:block hidden my-6 text-center">
+      <h1 className="text-xl font-bold text-primary print:text-black">{settings.companyName || "GESTION CAISSE"}</h1>
+      {settings.companyAddress && <p className="text-sm print:text-black">{settings.companyAddress}</p>}
+      <h2 className="text-lg font-semibold mt-1 print:text-black">{reportTitle}</h2>
+      {currentPrintDate && <p className="text-xs text-muted-foreground mt-1 print:text-black">Imprimé le: {currentPrintDate}</p>}
+    </div>
+  );
 
   return (
     <div className="space-y-6 print:space-y-2">
@@ -372,7 +404,7 @@ export default function ReportsPage() {
           <CardContent className="h-[350px]">
             {spendingByCategory.length > 0 ? (
               <ChartContainer config={chartConfig} className="min-h-[200px] w-full">
-                 <BarChart accessibilityLayer data={spendingByCategory} layout="vertical" margin={{left: 20, right:20}}>
+                 <RechartsPrimitive.BarChart accessibilityLayer data={spendingByCategory} layout="vertical" margin={{left: 20, right:20}}>
                     <CartesianGrid horizontal={false} />
                     <XAxis type="number" dataKey="value" tickFormatter={(value) => formatCurrencyCFA(value).replace(/\u00A0/g, ' ')} hide/>
                     <YAxis dataKey="name" type="category" tickLine={false} axisLine={false} tickMargin={8} width={120} />
@@ -382,7 +414,7 @@ export default function ReportsPage() {
                          <Cell key={`cell-expense-${index}`} fill={`hsl(var(--chart-${(index % 5) + 1}))`} />
                        ))}
                     </Bar>
-                  </BarChart>
+                  </RechartsPrimitive.BarChart>
               </ChartContainer>
             ) : <p className="text-center text-muted-foreground pt-10">Aucune donnée de dépense pour la période/filtres sélectionnés.</p>}
           </CardContent>
@@ -396,7 +428,7 @@ export default function ReportsPage() {
           <CardContent className="h-[350px]">
              {incomeByCategory.length > 0 ? (
               <ChartContainer config={chartConfig} className="min-h-[200px] w-full">
-                 <PieChart>
+                 <RechartsPrimitive.PieChart>
                     <ShadTooltip content={<CustomTooltip />} />
                     <Pie data={incomeByCategory} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={100} labelLine={false} 
                          label={({ cx, cy, midAngle, innerRadius, outerRadius, percent, index, name }) => {
@@ -416,7 +448,7 @@ export default function ReportsPage() {
                         ))}
                     </Pie>
                     <ShadLegend content={<ChartLegendContent nameKey="name" />} />
-                 </PieChart>
+                 </RechartsPrimitive.PieChart>
               </ChartContainer>
             ) : <p className="text-center text-muted-foreground pt-10">Aucune donnée de revenu pour la période/filtres sélectionnés.</p>}
           </CardContent>
@@ -424,13 +456,7 @@ export default function ReportsPage() {
       </div>
 
       {/* Section for Print Header */}
-      <div className="print:block hidden my-8">
-        <div className="text-center">
-          <h1 className="text-2xl font-bold text-primary print:text-black">GESTION CAISSE</h1>
-          <h2 className="text-xl font-semibold mt-1 print:text-black">{reportTitle}</h2>
-          {currentPrintDate && <p className="text-sm text-muted-foreground mt-1 print:text-black">Imprimé le: {currentPrintDate}</p>}
-        </div>
-      </div>
+      {printHeader}
 
       {/* Detailed Transactions Table */}
       <Card className="print:shadow-none print:border-none print:bg-transparent">
@@ -443,23 +469,23 @@ export default function ReportsPage() {
             <div className="flex gap-2 w-full sm:w-auto">
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button className="w-full sm:w-auto">
+                  <Button className="w-full sm:w-auto" disabled={isLoadingSettings}>
                     <Download className="mr-2 h-4 w-4" /> Exporter <ChevronDown className="ml-2 h-4 w-4" />
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
-                  <DropdownMenuItem onClick={exportDetailedToCSV}>
+                  <DropdownMenuItem onClick={exportDetailedToCSV} disabled={isLoadingSettings}>
                     <FileText className="mr-2 h-4 w-4" /> Exporter en CSV
                   </DropdownMenuItem>
-                  <DropdownMenuItem onClick={exportDetailedToPDF}>
+                  <DropdownMenuItem onClick={exportDetailedToPDF} disabled={isLoadingSettings}>
                     <FileText className="mr-2 h-4 w-4" /> Exporter en PDF (A4)
                   </DropdownMenuItem>
-                  <DropdownMenuItem onClick={exportDetailedToXLSX}>
+                  <DropdownMenuItem onClick={exportDetailedToXLSX} disabled={isLoadingSettings}>
                     <FileSpreadsheet className="mr-2 h-4 w-4" /> Exporter en XLSX
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
-              <Button onClick={handlePrintDetailed} variant="outline" className="w-full sm:w-auto">
+              <Button onClick={handlePrintDetailed} variant="outline" className="w-full sm:w-auto" disabled={isLoadingSettings}>
                 <Printer className="mr-2 h-4 w-4" /> Imprimer
               </Button>
             </div>

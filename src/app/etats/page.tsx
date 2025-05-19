@@ -15,6 +15,7 @@ import { format, startOfMonth, endOfMonth, subMonths, startOfWeek, endOfWeek, su
 import { fr } from 'date-fns/locale';
 import { Download, Printer, FileText, FileSpreadsheet, ChevronDown } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { useSettings } from "@/hooks/use-settings"; // Import useSettings
 
 import jsPDF from 'jspdf';
 import 'jspdf-autotable';
@@ -33,6 +34,7 @@ interface EtatRow {
 export default function EtatsPage() {
   const { getTransactions } = useTransactions();
   const { getCategories } = useCategories();
+  const { settings, isLoading: isLoadingSettings } = useSettings(); // Use settings hook
   const allTransactions = getTransactions();
   const allCategories = getCategories();
 
@@ -123,18 +125,23 @@ export default function EtatsPage() {
   }, [dateRange]);
 
   const exportToPDF = () => {
+    if (isLoadingSettings) return;
     const doc = new jsPDF({ orientation: 'p', unit: 'mm', format: 'a4' });
     const tableCellStyles = { fontSize: 8, cellPadding: 1.5 };
-    const tableHeaderStyles = { fillColor: [220, 220, 220], textColor: [0,0,0], fontStyle: 'bold', fontSize: 8, halign: 'center' as const };
+    const tableHeaderStyles = { fillColor: [220, 220, 220], textColor: [0,0,0], fontStyle: 'bold' as const, fontSize: 8, halign: 'center' as const };
     
-    doc.setFontSize(16);
-    doc.text("GESTION CAISSE", doc.internal.pageSize.getWidth() / 2, 15, { align: 'center' });
+    doc.setFontSize(14);
+    doc.text(settings.companyName || "GESTION CAISSE", doc.internal.pageSize.getWidth() / 2, 10, { align: 'center' });
+    if (settings.companyAddress) {
+      doc.setFontSize(8);
+      doc.text(settings.companyAddress, doc.internal.pageSize.getWidth() / 2, 15, { align: 'center' });
+    }
     doc.setFontSize(12);
     doc.text(etatTitle, doc.internal.pageSize.getWidth() / 2, 22, { align: 'center' });
     doc.setFontSize(9);
-    doc.text(`Date d'export: ${currentPrintDate}`, doc.internal.pageSize.getWidth() / 2, 28, { align: 'center' });
+    doc.text(`Date d'export: ${currentPrintDate}`, doc.internal.pageSize.getWidth() / 2, 27, { align: 'center' });
 
-    let startY = 35;
+    let startY = 32;
 
     doc.setFontSize(10);
     doc.text("I- Les Recettes", 14, startY);
@@ -165,23 +172,23 @@ export default function EtatsPage() {
     startY = (doc as any).lastAutoTable.finalY + 2;
     (doc as any).autoTable({
       body: [[
-        {content: 'Total Recettes', colSpan: 2, styles: {fontStyle: 'bold', halign: 'left' as const}}, 
-        {content: formatCurrencyCFA(totalRecettesPrevus).replace(/\u00A0/g, ' '), styles: {fontStyle: 'bold', halign: 'right' as const}},
-        {content: formatCurrencyCFA(totalRecettesRealisees).replace(/\u00A0/g, ' '), styles: {fontStyle: 'bold', halign: 'right' as const}},
-        {content: '', styles: {}}, // Placeholder for % Réal.
-        {content: '', styles: {}}  // Placeholder for Ecart
+        {content: 'Total Recettes', colSpan: 2, styles: {fontStyle: 'bold' as const, halign: 'left' as const}}, 
+        {content: formatCurrencyCFA(totalRecettesPrevus).replace(/\u00A0/g, ' '), styles: {fontStyle: 'bold' as const, halign: 'right' as const}},
+        {content: formatCurrencyCFA(totalRecettesRealisees).replace(/\u00A0/g, ' '), styles: {fontStyle: 'bold' as const, halign: 'right' as const}},
+        {content: '', styles: {}}, 
+        {content: '', styles: {}}  
       ]],
       startY: startY,
       theme: 'grid',
-      styles: {...tableCellStyles, fontStyle: 'bold'},
-      columnStyles: { // Ensure columnStyles match the main table for alignment
-        0: { cellWidth: 10 + 50 + 1.5 }, // N° + Types de recettes + padding
+      styles: {...tableCellStyles, fontStyle: 'bold' as const},
+      columnStyles: { 
+        0: { cellWidth: 10 + 50 + 1.5 }, 
         1: { cellWidth: 35, halign: 'right' as const },
         2: { cellWidth: 35, halign: 'right' as const },
         3: { cellWidth: 20 },
         4: { cellWidth: 30 }
       },
-      didParseCell: function (data: any) { // Ensure colSpan is applied correctly
+      didParseCell: function (data: any) { 
         if (data.row.index === 0 && data.cell.raw.content === 'Total Recettes') {
              data.cell.colSpan = 2;
         }
@@ -218,15 +225,15 @@ export default function EtatsPage() {
     startY = (doc as any).lastAutoTable.finalY + 2;
     (doc as any).autoTable({
       body: [[
-        {content: 'Total Dépenses', colSpan: 2, styles: {fontStyle: 'bold', halign: 'left' as const}}, 
-        {content: formatCurrencyCFA(totalDepensesPrevus).replace(/\u00A0/g, ' '), styles: {fontStyle: 'bold', halign: 'right' as const}},
-        {content: formatCurrencyCFA(totalDepensesRealisees).replace(/\u00A0/g, ' '), styles: {fontStyle: 'bold', halign: 'right' as const}},
-        {content: '', styles: {}}, // Placeholder for % Réal.
-        {content: '', styles: {}}  // Placeholder for Ecart
+        {content: 'Total Dépenses', colSpan: 2, styles: {fontStyle: 'bold' as const, halign: 'left' as const}}, 
+        {content: formatCurrencyCFA(totalDepensesPrevus).replace(/\u00A0/g, ' '), styles: {fontStyle: 'bold' as const, halign: 'right' as const}},
+        {content: formatCurrencyCFA(totalDepensesRealisees).replace(/\u00A0/g, ' '), styles: {fontStyle: 'bold' as const, halign: 'right' as const}},
+        {content: '', styles: {}}, 
+        {content: '', styles: {}}  
       ]],
       startY: startY,
       theme: 'grid',
-      styles: {...tableCellStyles, fontStyle: 'bold'},
+      styles: {...tableCellStyles, fontStyle: 'bold' as const},
       columnStyles: { 
         0: { cellWidth: 10 + 50 + 1.5 }, 
         1: { cellWidth: 35, halign: 'right' as const },
@@ -246,26 +253,28 @@ export default function EtatsPage() {
     (doc as any).autoTable({
         body: [
             [
-             { content: 'BALANCE', styles: { fontStyle: 'bold', halign: 'left' as const, cellWidth: 45 } }, // Adjusted width
+             { content: 'BALANCE', styles: { fontStyle: 'bold' as const, halign: 'left' as const, cellWidth: 45 } }, 
              { content: `Total Recettes: ${formatCurrencyCFA(totalRecettesRealisees).replace(/\u00A0/g, ' ')}`, styles: {halign: 'right' as const, cellWidth: 50} },
              { content: `Total Dépenses: ${formatCurrencyCFA(totalDepensesRealisees).replace(/\u00A0/g, ' ')}`, styles: {halign: 'right' as const, cellWidth: 50} },
-             { content: `Solde: ${formatCurrencyCFA(soldeRealise).replace(/\u00A0/g, ' ')}`, styles: { fontStyle: 'bold', halign: 'right' as const, cellWidth: 35} },
+             { content: `Solde: ${formatCurrencyCFA(soldeRealise).replace(/\u00A0/g, ' ')}`, styles: { fontStyle: 'bold' as const, halign: 'right' as const, cellWidth: 35} },
             ]
         ],
         startY: startY,
-        theme: 'plain', // 'plain' for no borders, 'grid' for borders
-        styles: {...tableCellStyles, fontStyle: 'bold'},
-        tableWidth: 'auto' // Or specify a width doc.internal.pageSize.getWidth() - 28
+        theme: 'plain', 
+        styles: {...tableCellStyles, fontStyle: 'bold' as const},
+        tableWidth: 'auto' 
     });
 
     doc.save(`etat_de_caisse_A4.pdf`);
   };
 
   const exportToXLSX = () => {
+    if (isLoadingSettings) return;
     const wb = XLSX.utils.book_new();
     
     const headerXlsx = [
-      { col1: "GESTION CAISSE" },
+      { col1: settings.companyName || "GESTION CAISSE" },
+      ...(settings.companyAddress ? [{ col1: settings.companyAddress }] : []),
       { col1: etatTitle },
       { col1: `Date d'export: ${currentPrintDate}` },
       {}, 
@@ -276,7 +285,7 @@ export default function EtatsPage() {
       "Types de recettes": r.type,
       "Montant Prévu": r.montantPrevu,
       "Montant Réalisé": r.montantRealise,
-      "% Réal.": r.pourcentageRealisation / 100, // Store as decimal for Excel percentage format
+      "% Réal.": r.pourcentageRealisation / 100, 
       "Ecart": r.ecart,
     }));
     wsDataRecettes.push({
@@ -300,21 +309,24 @@ export default function EtatsPage() {
     });
 
     const wsSummary = [
-      {}, // Empty row for spacing
-      { col1: "BALANCE" }, // Title in its own row
+      {}, 
+      { col1: "BALANCE" }, 
       { col1: "Total Recettes", col2: totalRecettesRealisees },
       { col1: "Total Dépenses", col2: totalDepensesRealisees },
       { col1: "Solde", col2: soldeRealise }
     ];
 
     const ws = XLSX.utils.json_to_sheet(headerXlsx, {skipHeader: true});
-    XLSX.utils.sheet_add_aoa(ws, [["I- Les Recettes"]], {origin: "A5"});
-    XLSX.utils.sheet_add_json(ws, wsDataRecettes, {origin: "A6", skipHeader: false});
-    const recettesEndRow = 6 + wsDataRecettes.length;
-    XLSX.utils.sheet_add_aoa(ws, [["II- Les Dépenses"]], {origin: {r: recettesEndRow + 1, c: 0}}); 
-    XLSX.utils.sheet_add_json(ws, wsDataDepenses, {origin: {r: recettesEndRow + 2, c: 0}, skipHeader: false}); 
-    const depensesEndRow = recettesEndRow + 2 + wsDataDepenses.length;
-    XLSX.utils.sheet_add_json(ws, wsSummary, {origin: {r: depensesEndRow + 1, c:0}, skipHeader: true});
+    const recettesStartRow = headerXlsx.length + 1;
+    XLSX.utils.sheet_add_aoa(ws, [["I- Les Recettes"]], {origin: `A${recettesStartRow}`});
+    XLSX.utils.sheet_add_json(ws, wsDataRecettes, {origin: `A${recettesStartRow + 1}`, skipHeader: false});
+    
+    const depensesStartRow = recettesStartRow + 1 + wsDataRecettes.length + 1;
+    XLSX.utils.sheet_add_aoa(ws, [["II- Les Dépenses"]], {origin: {r: depensesStartRow -1 , c: 0}}); 
+    XLSX.utils.sheet_add_json(ws, wsDataDepenses, {origin: {r: depensesStartRow, c: 0}, skipHeader: false}); 
+    
+    const summaryStartRow = depensesStartRow + wsDataDepenses.length + 1;
+    XLSX.utils.sheet_add_json(ws, wsSummary, {origin: {r: summaryStartRow -1, c:0}, skipHeader: true});
 
 
     ws['!cols'] = [{wch:5}, {wch:30}, {wch:15}, {wch:15}, {wch:10}, {wch:15}];
@@ -322,40 +334,49 @@ export default function EtatsPage() {
     const currencyFormat = '#,##0 "F CFA"';
     const percentageFormat = '0%';
 
-    wsDataRecettes.forEach((_row, i) => {
-        const rowIndex = 7 + i;
+    // Format Recettes
+    for (let i = 0; i < wsDataRecettes.length; i++) {
+        const rowIndex = recettesStartRow + 1 + i; // +1 for table header
+        if (ws[`C${rowIndex}`]) ws[`C${rowIndex}`].z = currencyFormat; // Prévu
+        if (ws[`D${rowIndex}`]) ws[`D${rowIndex}`].z = currencyFormat; // Réalisé
+        if (ws[`E${rowIndex}`] && wsDataRecettes[i]["% Réal."] !== null) ws[`E${rowIndex}`].z = percentageFormat; // % Réal.
+        if (ws[`F${rowIndex}`] && wsDataRecettes[i]["Ecart"] !== null) ws[`F${rowIndex}`].z = currencyFormat; // Ecart
+    }
+    // Format Dépenses
+    for (let i = 0; i < wsDataDepenses.length; i++) {
+        const rowIndex = depensesStartRow + i; // +1 for table header
         if (ws[`C${rowIndex}`]) ws[`C${rowIndex}`].z = currencyFormat;
         if (ws[`D${rowIndex}`]) ws[`D${rowIndex}`].z = currencyFormat;
-        if (ws[`E${rowIndex}`] && _row["% Réal."] !== null) ws[`E${rowIndex}`].z = percentageFormat;
-        if (ws[`F${rowIndex}`] && _row["Ecart"] !== null) ws[`F${rowIndex}`].z = currencyFormat;
-    });
-     wsDataDepenses.forEach((_row, i) => {
-        const rowIndex = recettesEndRow + 3 + i;
-        if (ws[`C${rowIndex}`]) ws[`C${rowIndex}`].z = currencyFormat;
-        if (ws[`D${rowIndex}`]) ws[`D${rowIndex}`].z = currencyFormat;
-        if (ws[`E${rowIndex}`] && _row["% Réal."] !== null) ws[`E${rowIndex}`].z = percentageFormat;
-        if (ws[`F${rowIndex}`] && _row["Ecart"] !== null) ws[`F${rowIndex}`].z = currencyFormat;
-    });
+        if (ws[`E${rowIndex}`] && wsDataDepenses[i]["% Réal."] !== null) ws[`E${rowIndex}`].z = percentageFormat;
+        if (ws[`F${rowIndex}`] && wsDataDepenses[i]["Ecart"] !== null) ws[`F${rowIndex}`].z = currencyFormat;
+    }
     
     // Format summary section
-    const summaryStartRow = depensesEndRow + 3;
-    if (ws[`B${summaryStartRow}`]) ws[`B${summaryStartRow}`].z = currencyFormat;
-    if (ws[`B${summaryStartRow + 1}`]) ws[`B${summaryStartRow + 1}`].z = currencyFormat;
-    if (ws[`B${summaryStartRow + 2}`]) ws[`B${summaryStartRow + 2}`].z = currencyFormat;
+    const balanceDataStartRow = summaryStartRow + 1; // After "BALANCE" title
+    if (ws[`B${balanceDataStartRow}`]) ws[`B${balanceDataStartRow}`].z = currencyFormat; // Total Recettes
+    if (ws[`B${balanceDataStartRow + 1}`]) ws[`B${balanceDataStartRow + 1}`].z = currencyFormat; // Total Dépenses
+    if (ws[`B${balanceDataStartRow + 2}`]) ws[`B${balanceDataStartRow + 2}`].z = currencyFormat; // Solde
 
     if(!ws['!merges']) ws['!merges'] = [];
-    ws['!merges'].push({s: {r:0, c:0}, e: {r:0, c:5}}); 
-    ws['!merges'].push({s: {r:1, c:0}, e: {r:1, c:5}}); 
-    ws['!merges'].push({s: {r:2, c:0}, e: {r:2, c:5}});
-    ws['!merges'].push({s: {r:4, c:0}, e: {r:4, c:5}}); 
-    ws['!merges'].push({s: {r:recettesEndRow + 1, c:0}, e: {r:recettesEndRow + 1, c:5}}); 
-    ws['!merges'].push({s: {r:depensesEndRow + 1, c:0}, e: {r:depensesEndRow + 1, c:5}}); // Merge for "BALANCE" title
+    ws['!merges'].push({s: {r:0, c:0}, e: {r:0, c:5}}); // Company Name
+    if (settings.companyAddress) {
+        ws['!merges'].push({s: {r:1, c:0}, e: {r:1, c:5}}); // Company Address
+        ws['!merges'].push({s: {r:2, c:0}, e: {r:2, c:5}}); // Etat Title
+        ws['!merges'].push({s: {r:3, c:0}, e: {r:3, c:5}}); // Export Date
+    } else {
+        ws['!merges'].push({s: {r:1, c:0}, e: {r:1, c:5}}); // Etat Title
+        ws['!merges'].push({s: {r:2, c:0}, e: {r:2, c:5}}); // Export Date
+    }
+    ws['!merges'].push({s: {r:recettesStartRow-1, c:0}, e: {r:recettesStartRow-1, c:5}}); 
+    ws['!merges'].push({s: {r:depensesStartRow -1, c:0}, e: {r:depensesStartRow -1, c:5}}); 
+    ws['!merges'].push({s: {r:summaryStartRow -1, c:0}, e: {r:summaryStartRow -1, c:5}}); // Merge for "BALANCE" title
     
     XLSX.utils.book_append_sheet(wb, ws, "Etat de Caisse");
     XLSX.writeFile(wb, "etat_de_caisse.xlsx");
   };
 
   const handlePrint = () => {
+    if (isLoadingSettings) return;
     window.print();
   };
 
@@ -416,13 +437,18 @@ export default function EtatsPage() {
     </Card>
   );
 
+  const printHeader = (
+     <div className="print:block hidden my-6 text-center">
+        <h1 className="text-xl font-bold text-primary print:text-black">{settings.companyName || "GESTION CAISSE"}</h1>
+        {settings.companyAddress && <p className="text-sm print:text-black">{settings.companyAddress}</p>}
+        <h2 className="text-lg font-semibold mt-1 print:text-black">{etatTitle}</h2>
+        {currentPrintDate && <p className="text-xs text-muted-foreground mt-1 print:text-black">Imprimé le: {currentPrintDate}</p>}
+      </div>
+  );
+
   return (
     <div className="space-y-6 print:space-y-2">
-      <div className="print:block hidden my-6 text-center">
-        <h1 className="text-2xl font-bold text-primary print:text-black">GESTION CAISSE</h1>
-        <h2 className="text-xl font-semibold mt-1 print:text-black">{etatTitle}</h2>
-        {currentPrintDate && <p className="text-sm text-muted-foreground mt-1 print:text-black">Imprimé le: {currentPrintDate}</p>}
-      </div>
+      {printHeader}
 
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 print:hidden">
         <div>
@@ -432,20 +458,20 @@ export default function EtatsPage() {
         <div className="flex gap-2 w-full sm:w-auto">
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button className="w-full sm:w-auto">
+              <Button className="w-full sm:w-auto" disabled={isLoadingSettings}>
                 <Download className="mr-2 h-4 w-4" /> Exporter <ChevronDown className="ml-2 h-4 w-4" />
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
-              <DropdownMenuItem onClick={exportToPDF}>
+              <DropdownMenuItem onClick={exportToPDF} disabled={isLoadingSettings}>
                 <FileText className="mr-2 h-4 w-4" /> Exporter en PDF (A4)
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={exportToXLSX}>
+              <DropdownMenuItem onClick={exportToXLSX} disabled={isLoadingSettings}>
                 <FileSpreadsheet className="mr-2 h-4 w-4" /> Exporter en XLSX
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
-          <Button onClick={handlePrint} variant="outline" className="w-full sm:w-auto">
+          <Button onClick={handlePrint} variant="outline" className="w-full sm:w-auto" disabled={isLoadingSettings}>
             <Printer className="mr-2 h-4 w-4" /> Imprimer
           </Button>
         </div>
@@ -511,4 +537,3 @@ export default function EtatsPage() {
     </div>
   );
 }
-
