@@ -55,7 +55,7 @@ export default function TransactionsPage() {
               <PlusCircle className="mr-2 h-4 w-4" /> Ajouter une Transaction
             </Button>
           </DialogTrigger>
-          <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
+          <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto print:hidden">
             <DialogHeader>
               <DialogTitle>{editingTransaction ? "Modifier" : "Ajouter"} une Transaction</DialogTitle>
             </DialogHeader>

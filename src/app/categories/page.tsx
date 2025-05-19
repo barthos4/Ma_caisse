@@ -1,3 +1,4 @@
+
 "use client";
 import { useState } from "react";
 import { CategoryForm } from "./category-form";
@@ -53,7 +54,7 @@ export default function CategoriesPage() {
               <PlusCircle className="mr-2 h-4 w-4" /> Ajouter une Catégorie
             </Button>
           </DialogTrigger>
-          <DialogContent className="sm:max-w-md">
+          <DialogContent className="sm:max-w-md print:hidden">
             <DialogHeader>
               <DialogTitle>{editingCategory ? "Modifier" : "Ajouter"} une Catégorie</DialogTitle>
             </DialogHeader>
