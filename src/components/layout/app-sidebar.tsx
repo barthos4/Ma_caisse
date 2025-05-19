@@ -1,3 +1,4 @@
+
 "use client";
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
@@ -12,7 +13,7 @@ import {
   SidebarTrigger,
 } from '@/components/ui/sidebar';
 import { Separator } from '@/components/ui/separator';
-import { Home, ArrowLeftRight, LayoutGrid, BarChart3, BookText, Settings, LogOut, Briefcase } from 'lucide-react';
+import { Home, ArrowLeftRight, LayoutGrid, BarChart3, BookText, Settings, LogOut, Briefcase, ClipboardList } from 'lucide-react'; // Added ClipboardList
 import { useIsMobile } from '@/hooks/use-mobile';
 import { ThemeSwitcher } from '@/components/theme-switcher';
 
@@ -21,6 +22,7 @@ const navItems = [
   { href: '/transactions', label: 'Transactions', icon: ArrowLeftRight },
   { href: '/categories', label: 'Catégories', icon: LayoutGrid },
   { href: '/reports', label: 'Rapports', icon: BarChart3 },
+  { href: '/etats', label: 'Etats de Caisse', icon: ClipboardList }, // Added new Etat item
   { href: '/journal', label: 'Journal de Caisse', icon: BookText },
 ];
 
