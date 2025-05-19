@@ -1,3 +1,4 @@
+
 // NOTE: This is a simplified in-memory data store for demonstration purposes.
 // In a real application, you would use a database and proper state management.
 "use client";
@@ -7,6 +8,7 @@ import { useState, useEffect, useCallback } from 'react';
 
 let nextTransactionId = 1; 
 let nextCategoryId = 1;    
+let nextOrderNumber = 1; // Counter for order numbers
 
 const initialTransactions: Transaction[] = []; 
 const initialCategories: Category[] = [];   
@@ -31,11 +33,11 @@ export const useTransactions = () => {
 
   const getTransactions = useCallback(() => [...transactionsStore].sort((a, b) => b.date.getTime() - a.date.getTime()), []);
   
-  const addTransaction = useCallback((transaction: Omit<Transaction, 'id'>) => {
+  const addTransaction = useCallback((transaction: Omit<Transaction, 'id' | 'orderNumber'> & { orderNumber?: string }) => {
     const newTransaction: Transaction = { 
       ...transaction, 
       id: String(nextTransactionId++),
-      orderNumber: transaction.orderNumber || undefined,
+      orderNumber: String(nextOrderNumber++), // Auto-increment and assign
       reference: transaction.reference || undefined,
     };
     transactionsStore = [newTransaction, ...transactionsStore];
@@ -46,12 +48,12 @@ export const useTransactions = () => {
     return transactionsStore.find(t => t.id === id);
   }, []);
 
-  const updateTransaction = useCallback((id: string, updatedTransactionData: Partial<Omit<Transaction, 'id'>>) => {
+  const updateTransaction = useCallback((id: string, updatedTransactionData: Partial<Omit<Transaction, 'id' | 'orderNumber'>>) => {
     transactionsStore = transactionsStore.map(t => 
       t.id === id ? { 
         ...t, 
         ...updatedTransactionData,
-        orderNumber: updatedTransactionData.orderNumber || t.orderNumber,
+        // orderNumber is not updatable here to maintain its original value
         reference: updatedTransactionData.reference || t.reference,
       } : t
     );
