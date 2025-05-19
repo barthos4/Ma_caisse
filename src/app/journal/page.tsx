@@ -61,7 +61,6 @@ export default function JournalPage() {
           balance: runningBalance,
         };
       });
-      // .reverse(); // Supprimé pour que le plus ancien soit en haut
   }, [transactions, getCategoryById]);
 
   const handleEditTransaction = (transaction: Transaction) => {
@@ -77,8 +76,7 @@ export default function JournalPage() {
 
   const exportToCSV = () => {
     const headers = ["Date", "Description", "Catégorie", "Type", "Revenu (F CFA)", "Dépense (F CFA)", "Solde (F CFA)"];
-    // Pour le CSV, il est souvent préférable de garder l'ordre d'affichage (plus ancien en haut)
-    const entriesToExport = [...journalEntries]; // Pas besoin de .reverse() ici
+    const entriesToExport = [...journalEntries]; 
 
     const rows = entriesToExport.map(entry => {
       const income = entry.type === 'income' ? entry.amount : 0;
@@ -117,21 +115,19 @@ export default function JournalPage() {
     const tableColumn = ["Date", "Description", "Catégorie", "Type", "Revenu", "Dépense", "Solde"];
     const tableRows: (string | number)[][] = [];
     
-    // Utilise journalEntries directement (plus ancien en haut)
     journalEntries.forEach(entry => {
       const entryData = [
         format(entry.date, 'dd/MM/yyyy', { locale: fr }),
         entry.description,
         entry.categoryName,
         entry.type === 'income' ? 'Revenu' : 'Dépense',
-        entry.type === 'income' ? formatCurrencyCFA(entry.amount) : '-',
-        entry.type === 'expense' ? formatCurrencyCFA(entry.amount) : '-',
-        formatCurrencyCFA(entry.balance)
+        entry.type === 'income' ? formatCurrencyCFA(entry.amount).replace(/\u00A0/g, ' ') : '-',
+        entry.type === 'expense' ? formatCurrencyCFA(entry.amount).replace(/\u00A0/g, ' ') : '-',
+        formatCurrencyCFA(entry.balance).replace(/\u00A0/g, ' ')
       ];
       tableRows.push(entryData);
     });
 
-    // En-tête du document
     doc.setFontSize(18);
     doc.text("GESTION CAISSE", doc.internal.pageSize.getWidth() / 2, 15, { align: 'center' });
     doc.setFontSize(14);
@@ -167,7 +163,6 @@ export default function JournalPage() {
       {}, 
     ];
     
-    // Utilise journalEntries directement (plus ancien en haut)
     const worksheetData = journalEntries.map(entry => ({
       Date: format(entry.date, 'yyyy-MM-dd', { locale: fr }),
       Description: entry.description,

@@ -172,7 +172,6 @@ export default function ReportsPage() {
     return type === 'income' ? 'Revenu' : 'Dépense';
   }
 
-  // Export and Print functions for Detailed Transactions
   const exportDetailedToCSV = () => {
     const headers = ["Date", "Description", "Catégorie", "Type", "Montant (F CFA)"];
     const rows = filteredTransactions.map(t => {
@@ -183,7 +182,7 @@ export default function ReportsPage() {
         descriptionCSV,
         categoryNameCSV,
         getTransactionTypeName(t.type),
-        t.amount.toFixed(0) // No decimals
+        t.amount.toFixed(0) 
       ].join(',');
     });
 
@@ -213,7 +212,7 @@ export default function ReportsPage() {
         t.description,
         getCategoryById(t.categoryId)?.name || 'Non classé(e)',
         getTransactionTypeName(t.type),
-        formatCurrencyCFA(t.amount)
+        formatCurrencyCFA(t.amount).replace(/\u00A0/g, ' ') 
       ];
       tableRows.push(entryData);
     });
@@ -276,8 +275,6 @@ export default function ReportsPage() {
   };
 
   const handlePrintDetailed = () => {
-    // We rely on CSS @media print to hide unnecessary elements
-    // and the dynamic title section for printing.
     window.print();
   };
 
@@ -508,6 +505,4 @@ export default function ReportsPage() {
     </div>
   );
 }
-
-
     
