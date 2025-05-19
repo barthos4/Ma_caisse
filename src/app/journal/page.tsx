@@ -114,14 +114,14 @@ export default function JournalPage() {
   };
 
   const exportToPDF = () => {
-    const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' }); // Changed to landscape
+    const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' }); 
     const tableColumn = ["N° Ord.", "Date", "Description", "Réf.", "Catégorie", "Type", "Revenu", "Dépense", "Solde"];
     const tableRows: (string | number)[][] = [];
     
     journalEntries.forEach(entry => {
       const entryData = [
         entry.orderNumber || '-',
-        format(entry.date, 'dd/MM/yy', { locale: fr }), // Shorter date format
+        format(entry.date, 'dd/MM/yy', { locale: fr }), 
         entry.description,
         entry.reference || '-',
         entry.categoryName,
@@ -146,17 +146,17 @@ export default function JournalPage() {
       startY: 35, 
       theme: 'grid',
       headStyles: { fillColor: [22, 160, 133], fontSize: 7 }, 
-      styles: { font: 'helvetica', fontSize: 7, cellPadding: 1, overflow: 'linebreak' }, // Reduced font size and padding
+      styles: { font: 'helvetica', fontSize: 7, cellPadding: 1, overflow: 'linebreak' }, 
       columnStyles: {
-        0: { cellWidth: 15 }, // N° Ordre
-        1: { cellWidth: 18 }, // Date
-        2: { cellWidth: 'auto' }, // Description
-        3: { cellWidth: 20 }, // Référence
-        4: { cellWidth: 30 }, // Catégorie
-        5: { cellWidth: 18 }, // Type
-        6: { cellWidth: 25, halign: 'right' }, // Revenu
-        7: { cellWidth: 25, halign: 'right' }, // Dépense
-        8: { cellWidth: 25, halign: 'right' }, // Solde
+        0: { cellWidth: 15 }, 
+        1: { cellWidth: 18 }, 
+        2: { cellWidth: 'auto' }, 
+        3: { cellWidth: 20 }, 
+        4: { cellWidth: 30 }, 
+        5: { cellWidth: 18 }, 
+        6: { cellWidth: 25, halign: 'right' }, 
+        7: { cellWidth: 25, halign: 'right' }, 
+        8: { cellWidth: 25, halign: 'right' }, 
       }
     });
     doc.save("journal_caisse_A4.pdf");
@@ -249,7 +249,7 @@ export default function JournalPage() {
       </div>
 
       <Dialog open={isFormOpen} onOpenChange={setIsFormOpen}>
-        <DialogContent className="sm:max-w-lg print:hidden">
+        <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto print:hidden">
           <DialogHeader>
             <DialogTitle>Modifier la Transaction</DialogTitle>
           </DialogHeader>
