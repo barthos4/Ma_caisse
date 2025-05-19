@@ -75,8 +75,10 @@ export default function TransactionsPage() {
           <Table>
             <TableHeader>
               <TableRow>
+                <TableHead>N° Ordre</TableHead>
                 <TableHead>Date</TableHead>
                 <TableHead>Description</TableHead>
+                <TableHead>Référence</TableHead>
                 <TableHead>Catégorie</TableHead>
                 <TableHead>Type</TableHead>
                 <TableHead className="text-right">Montant</TableHead>
@@ -86,15 +88,17 @@ export default function TransactionsPage() {
             <TableBody>
               {transactions.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={6} className="text-center text-muted-foreground h-24">
+                  <TableCell colSpan={8} className="text-center text-muted-foreground h-24">
                     Aucune transaction pour le moment. Cliquez sur "Ajouter une Transaction" pour commencer.
                   </TableCell>
                 </TableRow>
               )}
               {transactions.map((transaction) => (
                 <TableRow key={transaction.id}>
+                  <TableCell className="max-w-[80px] truncate" title={transaction.orderNumber}>{transaction.orderNumber || '-'}</TableCell>
                   <TableCell>{format(transaction.date, 'PP', { locale: fr })}</TableCell>
-                  <TableCell className="font-medium max-w-xs truncate">{transaction.description}</TableCell>
+                  <TableCell className="font-medium max-w-xs truncate" title={transaction.description}>{transaction.description}</TableCell>
+                  <TableCell className="max-w-[100px] truncate" title={transaction.reference}>{transaction.reference || '-'}</TableCell>
                   <TableCell>
                     <Badge variant="secondary">{getCategoryById(transaction.categoryId)?.name || 'N/A'}</Badge>
                   </TableCell>

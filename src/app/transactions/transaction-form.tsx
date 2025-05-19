@@ -19,8 +19,10 @@ import { useTransactions, useCategories } from "@/lib/mock-data";
 import { useEffect, useState } from "react";
 
 const transactionFormSchema = z.object({
+  orderNumber: z.string().max(50, "Le N° d'ordre ne peut pas dépasser 50 caractères.").optional(),
   date: z.date({ required_error: "Une date est requise." }),
   description: z.string().min(1, "La description est requise.").max(100, "La description est trop longue."),
+  reference: z.string().max(50, "La référence ne peut pas dépasser 50 caractères.").optional(),
   amount: z.coerce.number().positive("Le montant doit être positif."),
   type: z.enum(["income", "expense"], { required_error: "Le type de transaction est requis." }),
   categoryId: z.string().min(1, "La catégorie est requise."),
@@ -44,10 +46,14 @@ export function TransactionForm({ transactionToEdit, onFormSubmit }: Transaction
       ? {
           ...transactionToEdit,
           amount: Math.abs(transactionToEdit.amount), 
+          orderNumber: transactionToEdit.orderNumber || "",
+          reference: transactionToEdit.reference || "",
         }
       : {
+          orderNumber: "",
           date: new Date(),
           description: "",
+          reference: "",
           amount: 0,
           type: "expense",
           categoryId: "",
@@ -74,11 +80,15 @@ export function TransactionForm({ transactionToEdit, onFormSubmit }: Transaction
       form.reset({
         ...transactionToEdit,
         amount: Math.abs(transactionToEdit.amount),
+        orderNumber: transactionToEdit.orderNumber || "",
+        reference: transactionToEdit.reference || "",
       });
     } else {
       form.reset({
+        orderNumber: "",
         date: new Date(),
         description: "",
+        reference: "",
         amount: 0,
         type: "expense",
         categoryId: "",
@@ -93,12 +103,26 @@ export function TransactionForm({ transactionToEdit, onFormSubmit }: Transaction
       addTransaction(data);
     }
     onFormSubmit();
-    form.reset({ date: new Date(), description: "", amount: 0, type: "expense", categoryId: "" });
+    form.reset({ orderNumber: "", date: new Date(), description: "", reference: "", amount: 0, type: "expense", categoryId: "" });
   }
 
   return (
     <Form {...form}>
       <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+        <FormField
+          control={form.control}
+          name="orderNumber"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>N° d'ordre (Optionnel)</FormLabel>
+              <FormControl>
+                <Input placeholder="ex: 001, A-123" {...field} />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+        
         <FormField
           control={form.control}
           name="date"
@@ -149,6 +173,20 @@ export function TransactionForm({ transactionToEdit, onFormSubmit }: Transaction
             </FormItem>
           )}
         />
+        
+        <FormField
+          control={form.control}
+          name="reference"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Référence (Optionnel)</FormLabel>
+              <FormControl>
+                <Input placeholder="ex: Facture #123, Chèque #456" {...field} />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
 
         <FormField
           control={form.control}
@@ -157,7 +195,7 @@ export function TransactionForm({ transactionToEdit, onFormSubmit }: Transaction
             <FormItem>
               <FormLabel>Montant</FormLabel>
               <FormControl>
-                <Input type="number" placeholder="0,00" {...field} step="0.01" />
+                <Input type="number" placeholder="0" {...field} step="1" />
               </FormControl>
               <FormMessage />
             </FormItem>
@@ -174,7 +212,6 @@ export function TransactionForm({ transactionToEdit, onFormSubmit }: Transaction
                 <RadioGroup
                   onValueChange={(value) => {
                     field.onChange(value);
-                    // form.setValue("categoryId", ""); // Reset category when type changes - handled in useEffect
                   }}
                   defaultValue={field.value}
                   className="flex space-x-4"

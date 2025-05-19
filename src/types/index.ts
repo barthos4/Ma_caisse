@@ -1,7 +1,9 @@
 export interface Transaction {
   id: string;
+  orderNumber?: string; // N° d'ordre
   date: Date;
   description: string;
+  reference?: string; // Référence de la transaction
   amount: number;
   type: 'income' | 'expense';
   categoryId: string; 

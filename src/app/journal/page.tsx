@@ -45,7 +45,6 @@ export default function JournalPage() {
 
   const journalEntries = useMemo(() => {
     let runningBalance = 0;
-    // Trie les transactions : la plus ancienne en premier
     return transactions
       .slice() 
       .sort((a, b) => a.date.getTime() - b.date.getTime()) 
@@ -75,18 +74,22 @@ export default function JournalPage() {
   };
 
   const exportToCSV = () => {
-    const headers = ["Date", "Description", "Catégorie", "Type", "Revenu (F CFA)", "Dépense (F CFA)", "Solde (F CFA)"];
+    const headers = ["N° Ordre", "Date", "Description", "Référence", "Catégorie", "Type", "Revenu (F CFA)", "Dépense (F CFA)", "Solde (F CFA)"];
     const entriesToExport = [...journalEntries]; 
 
     const rows = entriesToExport.map(entry => {
       const income = entry.type === 'income' ? entry.amount : 0;
       const expense = entry.type === 'expense' ? entry.amount : 0;
+      const orderNumberCSV = `"${String(entry.orderNumber || '').replace(/"/g, '""')}"`;
       const descriptionCSV = `"${String(entry.description || '').replace(/"/g, '""')}"`;
+      const referenceCSV = `"${String(entry.reference || '').replace(/"/g, '""')}"`;
       const categoryNameCSV = `"${String(entry.categoryName || '').replace(/"/g, '""')}"`;
       
       return [
+        orderNumberCSV,
         format(entry.date, 'yyyy-MM-dd', { locale: fr }),
         descriptionCSV,
+        referenceCSV,
         categoryNameCSV,
         entry.type === 'income' ? 'Revenu' : 'Dépense',
         income.toFixed(0),
@@ -111,14 +114,16 @@ export default function JournalPage() {
   };
 
   const exportToPDF = () => {
-    const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
-    const tableColumn = ["Date", "Description", "Catégorie", "Type", "Revenu", "Dépense", "Solde"];
+    const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' }); // Changed to landscape
+    const tableColumn = ["N° Ord.", "Date", "Description", "Réf.", "Catégorie", "Type", "Revenu", "Dépense", "Solde"];
     const tableRows: (string | number)[][] = [];
     
     journalEntries.forEach(entry => {
       const entryData = [
-        format(entry.date, 'dd/MM/yyyy', { locale: fr }),
+        entry.orderNumber || '-',
+        format(entry.date, 'dd/MM/yy', { locale: fr }), // Shorter date format
         entry.description,
+        entry.reference || '-',
         entry.categoryName,
         entry.type === 'income' ? 'Revenu' : 'Dépense',
         entry.type === 'income' ? formatCurrencyCFA(entry.amount).replace(/\u00A0/g, ' ') : '-',
@@ -140,16 +145,18 @@ export default function JournalPage() {
       body: tableRows,
       startY: 35, 
       theme: 'grid',
-      headStyles: { fillColor: [22, 160, 133] }, 
-      styles: { font: 'helvetica', fontSize: 8, cellPadding: 1.5, overflow: 'linebreak' },
+      headStyles: { fillColor: [22, 160, 133], fontSize: 7 }, 
+      styles: { font: 'helvetica', fontSize: 7, cellPadding: 1, overflow: 'linebreak' }, // Reduced font size and padding
       columnStyles: {
-        0: { cellWidth: 20 }, // Date
-        1: { cellWidth: 50 }, // Description
-        2: { cellWidth: 30 }, // Catégorie
-        3: { cellWidth: 20 }, // Type
-        4: { cellWidth: 25, halign: 'right' }, // Revenu
-        5: { cellWidth: 25, halign: 'right' }, // Dépense
-        6: { cellWidth: 25, halign: 'right' }, // Solde
+        0: { cellWidth: 15 }, // N° Ordre
+        1: { cellWidth: 18 }, // Date
+        2: { cellWidth: 'auto' }, // Description
+        3: { cellWidth: 20 }, // Référence
+        4: { cellWidth: 30 }, // Catégorie
+        5: { cellWidth: 18 }, // Type
+        6: { cellWidth: 25, halign: 'right' }, // Revenu
+        7: { cellWidth: 25, halign: 'right' }, // Dépense
+        8: { cellWidth: 25, halign: 'right' }, // Solde
       }
     });
     doc.save("journal_caisse_A4.pdf");
@@ -164,10 +171,12 @@ export default function JournalPage() {
     ];
     
     const worksheetData = journalEntries.map(entry => ({
-      Date: format(entry.date, 'yyyy-MM-dd', { locale: fr }),
-      Description: entry.description,
-      Catégorie: entry.categoryName,
-      Type: entry.type === 'income' ? 'Revenu' : 'Dépense',
+      "N° Ordre": entry.orderNumber || '',
+      "Date": format(entry.date, 'yyyy-MM-dd', { locale: fr }),
+      "Description": entry.description,
+      "Référence": entry.reference || '',
+      "Catégorie": entry.categoryName,
+      "Type": entry.type === 'income' ? 'Revenu' : 'Dépense',
       'Revenu (F CFA)': entry.type === 'income' ? entry.amount : null,
       'Dépense (F CFA)': entry.type === 'expense' ? entry.amount : null,
       'Solde (F CFA)': entry.balance
@@ -177,14 +186,14 @@ export default function JournalPage() {
     XLSX.utils.sheet_add_json(worksheet, worksheetData, {origin: "A5"}); 
     
     const colWidths = [
-        {wch:12}, {wch:40}, {wch:20}, {wch:10}, {wch:15}, {wch:15}, {wch:15}
+        {wch:10}, {wch:12}, {wch:40}, {wch:15}, {wch:20}, {wch:10}, {wch:15}, {wch:15}, {wch:15}
     ];
     worksheet['!cols'] = colWidths;
 
     if(!worksheet['!merges']) worksheet['!merges'] = [];
-    worksheet['!merges'].push({s: {r:0, c:0}, e: {r:0, c:6}}); 
-    worksheet['!merges'].push({s: {r:1, c:0}, e: {r:1, c:6}}); 
-    worksheet['!merges'].push({s: {r:2, c:0}, e: {r:2, c:6}}); 
+    worksheet['!merges'].push({s: {r:0, c:0}, e: {r:0, c:8}}); 
+    worksheet['!merges'].push({s: {r:1, c:0}, e: {r:1, c:8}}); 
+    worksheet['!merges'].push({s: {r:2, c:0}, e: {r:2, c:8}}); 
     
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, "Journal");
@@ -263,8 +272,10 @@ export default function JournalPage() {
           <Table>
             <TableHeader>
               <TableRow className="print:border-b print:border-gray-300">
+                <TableHead className="print:text-black">N° Ordre</TableHead>
                 <TableHead className="print:text-black">Date</TableHead>
                 <TableHead className="print:text-black">Description</TableHead>
+                <TableHead className="print:text-black">Référence</TableHead>
                 <TableHead className="print:text-black">Catégorie</TableHead>
                 <TableHead className="text-right print:text-black">Revenu</TableHead>
                 <TableHead className="text-right print:text-black">Dépense</TableHead>
@@ -275,15 +286,17 @@ export default function JournalPage() {
             <TableBody>
               {journalEntries.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={7} className="text-center text-muted-foreground h-24 print:text-black">
+                  <TableCell colSpan={9} className="text-center text-muted-foreground h-24 print:text-black">
                     Aucune transaction enregistrée pour le moment.
                   </TableCell>
                 </TableRow>
               )}
               {journalEntries.map((entry) => (
                 <TableRow key={entry.id} className="print:border-b print:border-gray-200">
+                  <TableCell className="print:text-black max-w-[80px] truncate" title={entry.orderNumber}>{entry.orderNumber || '-'}</TableCell>
                   <TableCell className="print:text-black">{format(entry.date, 'PP', { locale: fr })}</TableCell>
                   <TableCell className="font-medium max-w-[200px] truncate print:max-w-none print:text-black" title={entry.description}>{entry.description}</TableCell>
+                  <TableCell className="print:text-black max-w-[100px] truncate" title={entry.reference}>{entry.reference || '-'}</TableCell>
                   <TableCell className="print:text-black"><Badge variant="outline" className="print:border-gray-400 print:text-black print:bg-gray-100">{entry.categoryName}</Badge></TableCell>
                   <TableCell className="text-right text-accent-foreground print:text-green-700">
                     {entry.type === 'income' ? formatCurrencyCFA(entry.amount) : '-'}
@@ -311,4 +324,3 @@ export default function JournalPage() {
     </div>
   );
 }
-

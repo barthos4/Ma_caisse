@@ -133,7 +133,7 @@ export default function ReportsPage() {
       return (
         <div className="bg-background p-2 border rounded shadow-lg text-sm">
           <p className="font-medium">{data?.name || name || label}</p>
-          <p className="text-foreground">{formatCurrencyCFA(value)}</p>
+          <p className="text-foreground">{formatCurrencyCFA(value).replace(/\u00A0/g, ' ')}</p>
         </div>
       );
     }
@@ -173,13 +173,17 @@ export default function ReportsPage() {
   }
 
   const exportDetailedToCSV = () => {
-    const headers = ["Date", "Description", "Catégorie", "Type", "Montant (F CFA)"];
+    const headers = ["N° Ordre", "Date", "Description", "Référence", "Catégorie", "Type", "Montant (F CFA)"];
     const rows = filteredTransactions.map(t => {
+      const orderNumberCSV = `"${String(t.orderNumber || '').replace(/"/g, '""')}"`;
       const descriptionCSV = `"${String(t.description || '').replace(/"/g, '""')}"`;
+      const referenceCSV = `"${String(t.reference || '').replace(/"/g, '""')}"`;
       const categoryNameCSV = `"${String(getCategoryById(t.categoryId)?.name || 'Non classé(e)').replace(/"/g, '""')}"`;
       return [
+        orderNumberCSV,
         format(t.date, 'yyyy-MM-dd', { locale: fr }),
         descriptionCSV,
+        referenceCSV,
         categoryNameCSV,
         getTransactionTypeName(t.type),
         t.amount.toFixed(0) 
@@ -202,17 +206,19 @@ export default function ReportsPage() {
   };
 
   const exportDetailedToPDF = () => {
-    const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
-    const tableColumn = ["Date", "Description", "Catégorie", "Type", "Montant"];
+    const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' }); // Changed to landscape
+    const tableColumn = ["N° Ord.", "Date", "Description", "Réf.", "Catégorie", "Type", "Montant"];
     const tableRows: (string | number)[][] = [];
 
     filteredTransactions.forEach(t => {
       const entryData = [
-        format(t.date, 'dd/MM/yyyy', { locale: fr }),
+        t.orderNumber || '-',
+        format(t.date, 'dd/MM/yy', { locale: fr }), // Shorter date
         t.description,
+        t.reference || '-',
         getCategoryById(t.categoryId)?.name || 'Non classé(e)',
         getTransactionTypeName(t.type),
-        formatCurrencyCFA(t.amount).replace(/\u00A0/g, ' ') 
+        formatCurrencyCFA(t.amount).replace(/\u00A0/g, ' ')
       ];
       tableRows.push(entryData);
     });
@@ -229,14 +235,16 @@ export default function ReportsPage() {
       body: tableRows,
       startY: 35,
       theme: 'grid',
-      headStyles: { fillColor: [22, 160, 133] },
-      styles: { font: 'helvetica', fontSize: 8, cellPadding: 1.5, overflow: 'linebreak' },
+      headStyles: { fillColor: [22, 160, 133], fontSize: 7 }, // Reduced font size
+      styles: { font: 'helvetica', fontSize: 7, cellPadding: 1, overflow: 'linebreak' }, // Reduced font size
       columnStyles: {
-        0: { cellWidth: 20 }, // Date
-        1: { cellWidth: 70 }, // Description
-        2: { cellWidth: 35 }, // Catégorie
-        3: { cellWidth: 20 }, // Type
-        4: { cellWidth: 30, halign: 'right' }, // Montant
+        0: { cellWidth: 15 }, // N° Ordre
+        1: { cellWidth: 18 }, // Date
+        2: { cellWidth: 'auto' }, // Description
+        3: { cellWidth: 20 }, // Référence
+        4: { cellWidth: 35 }, // Catégorie
+        5: { cellWidth: 20 }, // Type
+        6: { cellWidth: 30, halign: 'right' }, // Montant
       }
     });
     doc.save("rapport_transactions_detaillees_A4.pdf");
@@ -251,23 +259,25 @@ export default function ReportsPage() {
     ];
     
     const worksheetData = filteredTransactions.map(t => ({
-      Date: format(t.date, 'yyyy-MM-dd', { locale: fr }),
-      Description: t.description,
-      Catégorie: getCategoryById(t.categoryId)?.name || 'Non classé(e)',
-      Type: getTransactionTypeName(t.type),
+      "N° Ordre": t.orderNumber || '',
+      "Date": format(t.date, 'yyyy-MM-dd', { locale: fr }),
+      "Description": t.description,
+      "Référence": t.reference || '',
+      "Catégorie": getCategoryById(t.categoryId)?.name || 'Non classé(e)',
+      "Type": getTransactionTypeName(t.type),
       'Montant (F CFA)': t.amount
     }));
 
     const worksheet = XLSX.utils.json_to_sheet(headerData, {skipHeader: true});
     XLSX.utils.sheet_add_json(worksheet, worksheetData, {origin: "A5"}); 
     
-    const colWidths = [ {wch:12}, {wch:40}, {wch:25}, {wch:15}, {wch:20} ];
+    const colWidths = [ {wch:10}, {wch:12}, {wch:40}, {wch:15}, {wch:25}, {wch:15}, {wch:20} ];
     worksheet['!cols'] = colWidths;
 
     if(!worksheet['!merges']) worksheet['!merges'] = [];
-    worksheet['!merges'].push({s: {r:0, c:0}, e: {r:0, c:4}}); 
-    worksheet['!merges'].push({s: {r:1, c:0}, e: {r:1, c:4}}); 
-    worksheet['!merges'].push({s: {r:2, c:0}, e: {r:2, c:4}}); 
+    worksheet['!merges'].push({s: {r:0, c:0}, e: {r:0, c:6}}); 
+    worksheet['!merges'].push({s: {r:1, c:0}, e: {r:1, c:6}}); 
+    worksheet['!merges'].push({s: {r:2, c:0}, e: {r:2, c:6}}); 
     
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, "Rapport Détail");
@@ -364,7 +374,7 @@ export default function ReportsPage() {
               <ChartContainer config={chartConfig} className="min-h-[200px] w-full">
                  <BarChart accessibilityLayer data={spendingByCategory} layout="vertical" margin={{left: 20, right:20}}>
                     <CartesianGrid horizontal={false} />
-                    <XAxis type="number" dataKey="value" tickFormatter={(value) => formatCurrencyCFA(value)} hide/>
+                    <XAxis type="number" dataKey="value" tickFormatter={(value) => formatCurrencyCFA(value).replace(/\u00A0/g, ' ')} hide/>
                     <YAxis dataKey="name" type="category" tickLine={false} axisLine={false} tickMargin={8} width={120} />
                     <ShadTooltip cursor={false} content={<CustomTooltip />} />
                     <Bar dataKey="value" layout="vertical" radius={5}>
@@ -459,8 +469,10 @@ export default function ReportsPage() {
           <Table>
             <TableHeader>
               <TableRow className="print:border-b print:border-gray-300">
+                <TableHead className="print:text-black">N° Ordre</TableHead>
                 <TableHead className="print:text-black">Date</TableHead>
                 <TableHead className="print:text-black">Description</TableHead>
+                <TableHead className="print:text-black">Référence</TableHead>
                 <TableHead className="print:text-black">Catégorie</TableHead>
                 <TableHead className="print:text-black">Type</TableHead>
                 <TableHead className="text-right print:text-black">Montant</TableHead>
@@ -469,17 +481,19 @@ export default function ReportsPage() {
             <TableBody>
               {filteredTransactions.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={5} className="text-center text-muted-foreground h-24 print:text-black">
+                  <TableCell colSpan={7} className="text-center text-muted-foreground h-24 print:text-black">
                     Aucune transaction pour les filtres sélectionnés.
                   </TableCell>
                 </TableRow>
               )}
               {filteredTransactions.map((t) => (
                 <TableRow key={t.id} className="print:border-b print:border-gray-200">
+                  <TableCell className="print:text-black max-w-[80px] truncate" title={t.orderNumber}>{t.orderNumber || '-'}</TableCell>
                   <TableCell className="print:text-black">{format(t.date, 'PP', { locale: fr })}</TableCell>
                   <TableCell className="font-medium max-w-[200px] truncate print:max-w-none print:text-black" title={t.description}>
                     {t.description}
                   </TableCell>
+                  <TableCell className="print:text-black max-w-[100px] truncate" title={t.reference}>{t.reference || '-'}</TableCell>
                   <TableCell className="print:text-black">
                     <Badge variant="outline" className="print:border-gray-400 print:text-black print:bg-gray-100">
                       {getCategoryById(t.categoryId)?.name || 'Non classé(e)'}

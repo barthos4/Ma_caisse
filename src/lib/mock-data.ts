@@ -32,7 +32,12 @@ export const useTransactions = () => {
   const getTransactions = useCallback(() => [...transactionsStore].sort((a, b) => b.date.getTime() - a.date.getTime()), []);
   
   const addTransaction = useCallback((transaction: Omit<Transaction, 'id'>) => {
-    const newTransaction: Transaction = { ...transaction, id: String(nextTransactionId++) };
+    const newTransaction: Transaction = { 
+      ...transaction, 
+      id: String(nextTransactionId++),
+      orderNumber: transaction.orderNumber || undefined,
+      reference: transaction.reference || undefined,
+    };
     transactionsStore = [newTransaction, ...transactionsStore];
     notifyTransactionListeners();
   }, []);
@@ -43,7 +48,12 @@ export const useTransactions = () => {
 
   const updateTransaction = useCallback((id: string, updatedTransactionData: Partial<Omit<Transaction, 'id'>>) => {
     transactionsStore = transactionsStore.map(t => 
-      t.id === id ? { ...t, ...updatedTransactionData } : t
+      t.id === id ? { 
+        ...t, 
+        ...updatedTransactionData,
+        orderNumber: updatedTransactionData.orderNumber || t.orderNumber,
+        reference: updatedTransactionData.reference || t.reference,
+      } : t
     );
     notifyTransactionListeners();
   }, []);
