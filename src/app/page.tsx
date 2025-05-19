@@ -1,18 +1,19 @@
+
 "use client";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
-import { TrendingUp, TrendingDown, DollarSign, List } from "lucide-react"; // DollarSign can be kept or replaced by a generic finance icon
+import { TrendingUp, TrendingDown, DollarSign, List } from "lucide-react"; 
 import { useDashboardData } from "@/lib/mock-data";
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { formatCurrencyCFA } from "@/lib/utils";
 
 export default function DashboardPage() {
-  const { currentBalance, recentTransactions, spendingSummary } = useDashboardData();
+  const { currentBalance, totalIncome, totalExpenses, recentTransactions, spendingSummary } = useDashboardData();
 
-  const totalSpending = Object.values(spendingSummary).reduce((sum, amount) => sum + amount, 0);
+  const totalSpendingFromSummary = Object.values(spendingSummary).reduce((sum, amount) => sum + amount, 0);
 
   return (
     <div className="space-y-6">
@@ -27,31 +28,31 @@ export default function DashboardPage() {
               {formatCurrencyCFA(currentBalance)}
             </div>
             <p className="text-xs text-muted-foreground mt-1">
-              Votre aperçu financier
+              Votre aperçu financier global.
             </p>
           </CardContent>
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Revenus Totaux (Exemple)</CardTitle>
+            <CardTitle className="text-sm font-medium">Revenus Totaux</CardTitle>
             <TrendingUp className="h-5 w-5 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-bold">{formatCurrencyCFA(523100.89)}</div>
+            <div className="text-3xl font-bold text-accent-foreground">{formatCurrencyCFA(totalIncome)}</div>
             <p className="text-xs text-muted-foreground mt-1">
-              +20.1% par rapport au mois dernier
+              Ensemble de tous les revenus enregistrés.
             </p>
           </CardContent>
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Dépenses Totales (Exemple)</CardTitle>
+            <CardTitle className="text-sm font-medium">Dépenses Totales</CardTitle>
             <TrendingDown className="h-5 w-5 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-bold">{formatCurrencyCFA(123100.89)}</div>
+            <div className="text-3xl font-bold text-destructive">{formatCurrencyCFA(totalExpenses)}</div>
             <p className="text-xs text-muted-foreground mt-1">
-              +10.5% par rapport au mois dernier
+              Ensemble de toutes les dépenses enregistrées.
             </p>
           </CardContent>
         </Card>
@@ -97,7 +98,7 @@ export default function DashboardPage() {
 
         <Card>
           <CardHeader>
-            <CardTitle>Résumé des Dépenses</CardTitle>
+            <CardTitle>Résumé des Dépenses par Catégorie</CardTitle>
             <CardDescription>Répartition de vos dépenses par catégorie.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -105,7 +106,7 @@ export default function DashboardPage() {
                <p className="text-sm text-muted-foreground text-center">Aucune donnée de dépense disponible.</p>
             )}
             {Object.entries(spendingSummary).map(([category, amount]) => {
-              const percentage = totalSpending > 0 ? (amount / totalSpending) * 100 : 0;
+              const percentage = totalSpendingFromSummary > 0 ? (amount / totalSpendingFromSummary) * 100 : 0;
               return (
                 <div key={category} className="space-y-1">
                   <div className="flex justify-between items-center">

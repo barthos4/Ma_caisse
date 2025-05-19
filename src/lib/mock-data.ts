@@ -5,11 +5,11 @@
 import type { Transaction, Category } from '@/types';
 import { useState, useEffect, useCallback } from 'react';
 
-let nextTransactionId = 1; // Reset to 1
-let nextCategoryId = 1;    // Reset to 1
+let nextTransactionId = 1; 
+let nextCategoryId = 1;    
 
-const initialTransactions: Transaction[] = []; // Emptied
-const initialCategories: Category[] = [];   // Emptied
+const initialTransactions: Transaction[] = []; 
+const initialCategories: Category[] = [];   
 
 
 // --- Transactions ---
@@ -94,7 +94,6 @@ export const useCategories = () => {
   }, []);
 
   const deleteCategory = useCallback((id: string) => {
-    // Prevent deleting categories used in transactions (basic check)
     const isUsed = transactionsStore.some(t => t.categoryId === id);
     if (isUsed) {
       alert("Impossible de supprimer la catégorie car elle est utilisée dans des transactions.");
@@ -114,9 +113,18 @@ export const useDashboardData = () => {
   const { getCategoryById } = useCategories();
   const transactions = getTransactions();
 
-  const currentBalance = transactions.reduce((acc, t) => {
-    return t.type === 'income' ? acc + t.amount : acc - t.amount;
-  }, 0);
+  let totalIncome = 0;
+  let totalExpenses = 0;
+
+  transactions.forEach(t => {
+    if (t.type === 'income') {
+      totalIncome += t.amount;
+    } else {
+      totalExpenses += t.amount;
+    }
+  });
+  
+  const currentBalance = totalIncome - totalExpenses;
 
   const recentTransactions = transactions.slice(0, 5).map(t => ({
     ...t,
@@ -131,5 +139,5 @@ export const useDashboardData = () => {
       return acc;
     }, {} as Record<string, number>);
 
-  return { currentBalance, recentTransactions, spendingSummary };
+  return { currentBalance, totalIncome, totalExpenses, recentTransactions, spendingSummary };
 };
