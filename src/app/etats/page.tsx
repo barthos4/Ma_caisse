@@ -1,6 +1,6 @@
 
 "use client";
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useCallback } from "react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Input } from "@/components/ui/input";
@@ -11,18 +11,21 @@ import { useTransactions, useCategories } from "@/lib/mock-data";
 import type { Category } from "@/types";
 import { formatCurrencyCFA } from "@/lib/utils";
 import { DateRange } from "react-day-picker";
-import { format, startOfMonth, endOfMonth, subMonths, startOfWeek, endOfWeek, subWeeks, startOfDay, endOfDay, subDays, isSameDay } from "date-fns";
+import { format, startOfMonth, endOfMonth, subMonths, startOfWeek, endOfWeek, startOfDay, endOfDay, subDays, isSameDay, formatISO } from "date-fns";
 import { fr } from 'date-fns/locale';
 import { Download, Printer, FileText, FileSpreadsheet, ChevronDown, Loader2 } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { useSettings } from "@/hooks/use-settings";
+import { useBudgets } from "@/hooks/use-budgets.ts"; // Nouveau hook
+import { useToast } from "@/hooks/use-toast";
+
 
 import jsPDF from 'jspdf';
 import 'jspdf-autotable';
 import * as XLSX from 'xlsx';
 
 interface EtatRow {
-  id: string;
+  id: string; // category_id
   numero: number;
   type: string; // Category name
   montantPrevu: number;
@@ -31,13 +34,12 @@ interface EtatRow {
   ecart: number;
 }
 
-const PREVUS_RECETTES_STORAGE_KEY = 'GESTION_CAISSE_PREVUS_RECETTES';
-const PREVUS_DEPENSES_STORAGE_KEY = 'GESTION_CAISSE_PREVUS_DEPENSES';
-
 export default function EtatsPage() {
   const { transactions, isLoading: isLoadingTransactions, error: errorTransactions, fetchTransactions } = useTransactions();
   const { categories: allCategories, isLoading: isLoadingCategories, error: errorCategories, fetchCategories } = useCategories();
   const { settings, isLoading: isLoadingSettings } = useSettings();
+  const { budgets, fetchBudgetsForPeriod, upsertBudget, isLoadingBudgets, budgetError } = useBudgets();
+  const { toast } = useToast();
   
   const [currentPrintDate, setCurrentPrintDate] = useState("");
 
@@ -46,6 +48,7 @@ export default function EtatsPage() {
     to: endOfMonth(new Date()),
   });
 
+  // États locaux pour les montants prévus, synchronisés avec les données du hook useBudgets
   const [prevusRecettes, setPrevusRecettes] = useState<Record<string, number>>({});
   const [prevusDepenses, setPrevusDepenses] = useState<Record<string, number>>({});
 
@@ -53,46 +56,39 @@ export default function EtatsPage() {
     fetchTransactions();
     fetchCategories();
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, []); // Fetch initial transactions and categories
+
+  useEffect(() => {
+    if (dateRange?.from) {
+      fetchBudgetsForPeriod(dateRange.from);
+    }
+  }, [dateRange, fetchBudgetsForPeriod]);
+
+  useEffect(() => {
+    // Mettre à jour prevusRecettes et prevusDepenses lorsque les budgets sont chargés/modifiés
+    const newPrevusRecettes: Record<string, number> = {};
+    const newPrevusDepenses: Record<string, number> = {};
+    budgets.forEach(budget => {
+      if (budget.type === 'income') {
+        newPrevusRecettes[budget.category_id] = budget.amount;
+      } else {
+        newPrevusDepenses[budget.category_id] = budget.amount;
+      }
+    });
+    setPrevusRecettes(newPrevusRecettes);
+    setPrevusDepenses(newPrevusDepenses);
+  }, [budgets]);
+  
+  useEffect(() => {
+    if (budgetError) {
+      toast({ title: "Erreur Budgets", description: budgetError, variant: "destructive" });
+    }
+  }, [budgetError, toast]);
 
 
   useEffect(() => {
     setCurrentPrintDate(format(new Date(), 'dd/MM/yyyy', { locale: fr }));
-
-    // Charger les prévisions depuis localStorage
-    try {
-      const storedRecettes = localStorage.getItem(PREVUS_RECETTES_STORAGE_KEY);
-      if (storedRecettes) {
-        setPrevusRecettes(JSON.parse(storedRecettes));
-      }
-      const storedDepenses = localStorage.getItem(PREVUS_DEPENSES_STORAGE_KEY);
-      if (storedDepenses) {
-        setPrevusDepenses(JSON.parse(storedDepenses));
-      }
-    } catch (error) {
-      console.error("Erreur lors du chargement des prévisions depuis localStorage:", error);
-      // Initialiser avec des objets vides si le parsing échoue
-      setPrevusRecettes({});
-      setPrevusDepenses({});
-    }
   }, []);
-
-  useEffect(() => {
-    // Sauvegarder les prévisions dans localStorage à chaque changement
-    try {
-      localStorage.setItem(PREVUS_RECETTES_STORAGE_KEY, JSON.stringify(prevusRecettes));
-    } catch (error) {
-        console.error("Erreur lors de la sauvegarde des prévisions (recettes) dans localStorage:", error);
-    }
-  }, [prevusRecettes]);
-
-  useEffect(() => {
-    try {
-      localStorage.setItem(PREVUS_DEPENSES_STORAGE_KEY, JSON.stringify(prevusDepenses));
-    } catch (error) {
-        console.error("Erreur lors de la sauvegarde des prévisions (dépenses) dans localStorage:", error);
-    }
-  }, [prevusDepenses]);
 
 
   const presetDateRanges = [
@@ -110,12 +106,27 @@ export default function EtatsPage() {
     });
   }, [transactions, dateRange]);
 
-  const handlePrevuChange = (categoryId: string, value: string, type: 'income' | 'expense') => {
+  const handlePrevuChange = async (categoryId: string, value: string, type: 'income' | 'expense') => {
     const amount = parseFloat(value) || 0;
+    
     if (type === 'income') {
       setPrevusRecettes(prev => ({ ...prev, [categoryId]: amount }));
     } else {
       setPrevusDepenses(prev => ({ ...prev, [categoryId]: amount }));
+    }
+
+    if (dateRange?.from) {
+      const result = await upsertBudget(categoryId, dateRange.from, amount, type);
+      if (!result) {
+        toast({ title: "Erreur", description: `Impossible d'enregistrer le budget pour la catégorie. ${budgetError || ''}`, variant: "destructive"});
+        // Revenir à l'ancienne valeur si l'enregistrement échoue ?
+        // Pour cela, il faudrait stocker l'ancienne valeur avant la mise à jour de l'état local.
+      } else {
+        // Optionnel: toast de succès
+        // toast({ title: "Budget Enregistré", description: "Le montant prévu a été sauvegardé."});
+      }
+    } else {
+      toast({ title: "Erreur", description: "Veuillez sélectionner une période valide pour enregistrer le budget.", variant: "destructive"});
     }
   };
 
@@ -128,7 +139,7 @@ export default function EtatsPage() {
           .reduce((sum, t) => sum + t.amount, 0);
         
         const montantPrevu = type === 'income' ? (prevusRecettes[category.id] || 0) : (prevusDepenses[category.id] || 0);
-        const pourcentageRealisation = montantPrevu > 0 ? (montantRealise / montantPrevu) * 100 : (montantRealise > 0 ? 100 : 0); // Si prévu est 0 mais réalisé > 0, on peut considérer 100% (ou adapter)
+        const pourcentageRealisation = montantPrevu > 0 ? (montantRealise / montantPrevu) * 100 : (montantRealise > 0 ? 100 : 0);
         const ecart = montantRealise - montantPrevu;
 
         return {
@@ -226,7 +237,7 @@ export default function EtatsPage() {
       theme: 'grid',
       styles: {...tableCellStyles, fontStyle: 'bold' as const},
       columnStyles: { 
-        0: { cellWidth: 10 + 50 + 1.5 }, 
+        0: { cellWidth: 10 + 50 + 1.5 }, // Ajusté pour colSpan
         1: { cellWidth: 35, halign: 'right' as const },
         2: { cellWidth: 35, halign: 'right' as const },
         3: { cellWidth: 20 },
@@ -279,7 +290,7 @@ export default function EtatsPage() {
       theme: 'grid',
       styles: {...tableCellStyles, fontStyle: 'bold' as const},
       columnStyles: { 
-        0: { cellWidth: 10 + 50 + 1.5 }, 
+        0: { cellWidth: 10 + 50 + 1.5 }, // Ajusté pour colSpan
         1: { cellWidth: 35, halign: 'right' as const },
         2: { cellWidth: 35, halign: 'right' as const },
         3: { cellWidth: 20 },
@@ -388,7 +399,7 @@ export default function EtatsPage() {
     }
     // Format Dépenses
     for (let i = 0; i < wsDataDepenses.length; i++) {
-        const rowIndex = depensesStartRow + i; // +1 for table header
+        const rowIndex = depensesStartRow + 1 + i; // +1 for table header
         if (ws[`C${rowIndex}`]) ws[`C${rowIndex}`].z = currencyFormat;
         if (ws[`D${rowIndex}`]) ws[`D${rowIndex}`].z = currencyFormat;
         if (ws[`E${rowIndex}`] && wsDataDepenses[i]["% Réal."] !== null) ws[`E${rowIndex}`].z = percentageFormat;
@@ -456,10 +467,11 @@ export default function EtatsPage() {
                 <TableCell className="text-right print:text-black">
                   <Input
                     type="number"
-                    value={type === 'income' ? (prevusRecettes[row.id] || '') : (prevusDepenses[row.id] || '')}
+                    value={(type === 'income' ? prevusRecettes[row.id] : prevusDepenses[row.id]) || ''}
                     onChange={(e) => handlePrevuChange(row.id, e.target.value, type)}
                     className="w-32 text-right print:border-none print:bg-transparent print:p-0"
                     placeholder="0"
+                    disabled={isLoadingBudgets} // Désactiver pendant le chargement/sauvegarde des budgets
                   />
                 </TableCell>
                 <TableCell className="text-right print:text-black">{formatCurrencyCFA(row.montantRealise)}</TableCell>
@@ -490,10 +502,10 @@ export default function EtatsPage() {
       </div>
   );
 
-  const isLoading = isLoadingCategories || isLoadingTransactions || isLoadingSettings;
-  const globalError = errorCategories || errorTransactions; // Pas d'erreur spécifique pour settings dans l'UI ici
+  const isLoadingPage = isLoadingCategories || isLoadingTransactions || isLoadingSettings || isLoadingBudgets;
+  const globalError = errorCategories || errorTransactions || budgetError; 
 
-  if (isLoading && !filteredTransactions.length && !allCategories.length) { // Afficher un loader global si rien n'est encore chargé
+  if (isLoadingPage && !filteredTransactions.length && !allCategories.length && !budgets.length) {
     return (
       <div className="flex justify-center items-center h-64">
         <Loader2 className="h-12 w-12 animate-spin text-primary" />
@@ -501,7 +513,7 @@ export default function EtatsPage() {
     );
   }
 
-  if (globalError) {
+  if (globalError && !isLoadingPage) { // Afficher seulement si pas en chargement pour éviter flash
     return (
       <div className="text-center text-destructive py-10">
         <p>Erreur de chargement des données: {globalError}</p>
@@ -572,7 +584,7 @@ export default function EtatsPage() {
         </CardContent>
       </Card>
       
-      {isLoadingCategories ? (
+      {isLoadingCategories || isLoadingBudgets ? ( // Afficher le loader si les catégories OU les budgets chargent
         <div className="flex justify-center items-center h-24"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>
       ) : (
         <>
@@ -610,4 +622,3 @@ export default function EtatsPage() {
     </div>
   );
 }
-

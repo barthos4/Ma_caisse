@@ -133,6 +133,52 @@ export type Database = {
           }
         ]
       }
+      budgets: { // Ajout de la structure pour la table budgets
+        Row: {
+          id: string // uuid
+          user_id: string // uuid
+          category_id: string // uuid
+          period_start_date: string // date, e.g., '2024-01-01'
+          amount: number // numeric
+          type: "income" | "expense"
+          created_at: string // timestamptz
+          updated_at: string // timestamptz
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          category_id: string
+          period_start_date: string
+          amount: number
+          type: "income" | "expense"
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          category_id?: string
+          period_start_date?: string
+          amount?: number
+          type?: "income" | "expense"
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "budgets_user_id_fkey"
+            columns: ["user_id"]
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "budgets_category_id_fkey"
+            columns: ["category_id"]
+            referencedRelation: "categories"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
     }
     Views: {
       [_ in never]: never
