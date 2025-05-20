@@ -16,19 +16,18 @@ import { cn } from "@/lib/utils";
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
 import type { Transaction, Category } from "@/types";
-import { useTransactions, useCategories } from "@/lib/mock-data";
+import { useTransactions } from "@/lib/mock-data";
 import { useEffect, useState } from "react";
+import { useToast } from "@/hooks/use-toast";
 
-// orderNumber is now optional in the schema as it will be auto-generated for new transactions
-// or read-only for existing ones.
 const transactionFormSchema = z.object({
-  orderNumber: z.string().max(50, "Le N° d'ordre ne peut pas dépasser 50 caractères.").optional(),
+  orderNumber: z.string().max(50, "Le N° d'ordre ne peut pas dépasser 50 caractères.").optional().nullable(),
   date: z.date({ required_error: "Une date est requise." }),
   description: z.string().min(1, "La description est requise.").max(100, "La description est trop longue."),
-  reference: z.string().max(50, "La référence ne peut pas dépasser 50 caractères.").optional(),
+  reference: z.string().max(50, "La référence ne peut pas dépasser 50 caractères.").optional().nullable(),
   amount: z.coerce.number().positive("Le montant doit être positif."),
   type: z.enum(["income", "expense"], { required_error: "Le type de transaction est requis." }),
-  categoryId: z.string().min(1, "La catégorie est requise."),
+  categoryId: z.string().min(1, "La catégorie est requise.").nullable(), // Peut être nullable si pas de catégorie
 });
 
 type TransactionFormValues = z.infer<typeof transactionFormSchema>;
@@ -36,12 +35,13 @@ type TransactionFormValues = z.infer<typeof transactionFormSchema>;
 interface TransactionFormProps {
   transactionToEdit?: Transaction | null;
   onFormSubmit: () => void;
+  availableCategories: Category[]; // Passer les catégories disponibles
 }
 
-export function TransactionForm({ transactionToEdit, onFormSubmit }: TransactionFormProps) {
+export function TransactionForm({ transactionToEdit, onFormSubmit, availableCategories }: TransactionFormProps) {
   const { addTransaction, updateTransaction } = useTransactions();
-  const { getCategories } = useCategories();
-  const [availableCategories, setAvailableCategories] = useState<Category[]>([]);
+  const { toast } = useToast();
+  const [filteredCategories, setFilteredCategories] = useState<Category[]>([]);
 
   const form = useForm<TransactionFormValues>({
     resolver: zodResolver(transactionFormSchema),
@@ -49,33 +49,34 @@ export function TransactionForm({ transactionToEdit, onFormSubmit }: Transaction
       ? {
           ...transactionToEdit,
           amount: Math.abs(transactionToEdit.amount), 
-          orderNumber: transactionToEdit.orderNumber || "", // Keep existing orderNumber
+          orderNumber: transactionToEdit.orderNumber || "",
           reference: transactionToEdit.reference || "",
+          categoryId: transactionToEdit.categoryId || null,
         }
       : {
-          orderNumber: "", // Will be placeholder text or auto-generated info
+          orderNumber: "",
           date: new Date(),
           description: "",
           reference: "",
           amount: 0,
           type: "expense",
-          categoryId: "",
+          categoryId: null,
         },
   });
   
   const transactionType = form.watch("type");
 
   useEffect(() => {
-    const allCategories = getCategories();
-    const filtered = allCategories.filter(c => c.type === transactionType);
-    setAvailableCategories(filtered);
+    const filtered = availableCategories.filter(c => c.type === transactionType);
+    setFilteredCategories(filtered);
     
     const currentCategoryId = form.getValues("categoryId");
     if (currentCategoryId && !filtered.find(c => c.id === currentCategoryId)) {
-        form.setValue("categoryId", "");
+        form.setValue("categoryId", null); // Réinitialiser si la catégorie n'est plus valide
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [transactionType, getCategories]); // Removed form.setValue and form.getValues to avoid excessive re-renders
+  }, [transactionType, availableCategories, form.getValues, form.setValue]);
+
 
   useEffect(() => {
     if (transactionToEdit) {
@@ -84,39 +85,54 @@ export function TransactionForm({ transactionToEdit, onFormSubmit }: Transaction
         amount: Math.abs(transactionToEdit.amount),
         orderNumber: transactionToEdit.orderNumber || "",
         reference: transactionToEdit.reference || "",
+        categoryId: transactionToEdit.categoryId || null,
       });
     } else {
       form.reset({
-        orderNumber: "", // Will be handled by placeholder or readOnly display
+        orderNumber: "",
         date: new Date(),
         description: "",
         reference: "",
         amount: 0,
         type: "expense",
-        categoryId: "",
+        categoryId: null,
       });
     }
   }, [transactionToEdit, form]);
 
-  function onSubmit(data: TransactionFormValues) {
-    const dataToSubmit: Omit<Transaction, 'id' | 'orderNumber'> & { orderNumber?: string, reference?: string} = {
+  async function onSubmit(data: TransactionFormValues) {
+    const dataToSubmit: Omit<Transaction, 'id' | 'user_id'> = {
         date: data.date,
         description: data.description,
-        reference: data.reference,
+        reference: data.reference || undefined,
         amount: data.amount,
         type: data.type,
-        categoryId: data.categoryId,
+        categoryId: data.categoryId || "", // Envoyer une string vide si null, ou adapter le type Transaction
+        orderNumber: data.orderNumber || undefined,
     };
 
+    let success;
     if (transactionToEdit) {
-      // For update, we don't pass orderNumber as it's not meant to be changed by this form
-      updateTransaction(transactionToEdit.id, dataToSubmit);
+      success = await updateTransaction(transactionToEdit.id, dataToSubmit);
+      if (success) {
+        toast({ title: "Succès", description: "Transaction modifiée." });
+      } else {
+        toast({ title: "Erreur", description: "Impossible de modifier la transaction.", variant: "destructive" });
+      }
     } else {
-      // For add, orderNumber is generated by addTransaction, so we don't pass it from form
-      addTransaction(dataToSubmit);
+      const newTransaction = await addTransaction(dataToSubmit);
+      success = !!newTransaction;
+      if (success) {
+        toast({ title: "Succès", description: "Transaction ajoutée." });
+      } else {
+        toast({ title: "Erreur", description: "Impossible d'ajouter la transaction.", variant: "destructive" });
+      }
     }
-    onFormSubmit();
-    form.reset({ orderNumber: "", date: new Date(), description: "", reference: "", amount: 0, type: "expense", categoryId: "" });
+
+    if (success) {
+      onFormSubmit();
+      form.reset({ orderNumber: "", date: new Date(), description: "", reference: "", amount: 0, type: "expense", categoryId: null });
+    }
   }
 
   return (
@@ -127,14 +143,12 @@ export function TransactionForm({ transactionToEdit, onFormSubmit }: Transaction
           name="orderNumber"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>N° d'ordre</FormLabel>
+              <FormLabel>N° d'ordre (Optionnel)</FormLabel>
               <FormControl>
                 <Input 
-                  placeholder={transactionToEdit ? "" : "Généré automatiquement"} 
-                  {...field} 
-                  readOnly 
-                  value={transactionToEdit ? transactionToEdit.orderNumber : (field.value || "")}
-                  className="disabled:opacity-100 disabled:cursor-not-allowed bg-muted/50"
+                  placeholder="Ex: 001" 
+                  {...field}
+                  value={field.value || ""}
                 />
               </FormControl>
               <FormMessage />
@@ -200,7 +214,7 @@ export function TransactionForm({ transactionToEdit, onFormSubmit }: Transaction
             <FormItem>
               <FormLabel>Référence (Optionnel)</FormLabel>
               <FormControl>
-                <Input placeholder="ex: Facture #123, Chèque #456" {...field} />
+                <Input placeholder="ex: Facture #123, Chèque #456" {...field} value={field.value || ""} />
               </FormControl>
               <FormMessage />
             </FormItem>
@@ -260,19 +274,19 @@ export function TransactionForm({ transactionToEdit, onFormSubmit }: Transaction
           render={({ field }) => (
             <FormItem>
               <FormLabel>Catégorie</FormLabel>
-              <Select onValueChange={field.onChange} value={field.value} defaultValue={field.value}>
+              <Select onValueChange={field.onChange} value={field.value || ""} defaultValue={field.value || ""}>
                 <FormControl>
                   <SelectTrigger>
                     <SelectValue placeholder="Sélectionnez une catégorie" />
                   </SelectTrigger>
                 </FormControl>
                 <SelectContent>
-                  {availableCategories.map((category) => (
+                  {filteredCategories.map((category) => (
                     <SelectItem key={category.id} value={category.id}>
                       {category.name}
                     </SelectItem>
                   ))}
-                  {availableCategories.length === 0 && <p className="p-2 text-sm text-muted-foreground">Aucune catégorie pour ce type.</p>}
+                  {filteredCategories.length === 0 && <p className="p-2 text-sm text-muted-foreground">Aucune catégorie pour ce type.</p>}
                 </SelectContent>
               </Select>
               <FormMessage />

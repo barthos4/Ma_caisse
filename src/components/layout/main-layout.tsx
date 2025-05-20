@@ -6,7 +6,7 @@ import { SidebarProvider, SidebarInset } from '@/components/ui/sidebar';
 import { useAuth } from '@/hooks/use-auth';
 import { useRouter, usePathname } from 'next/navigation';
 import { useEffect } from 'react';
-import { Skeleton } from '@/components/ui/skeleton'; // For loading state
+import { Skeleton } from '@/components/ui/skeleton'; 
 
 interface MainLayoutProps {
   children: ReactNode;
@@ -15,9 +15,11 @@ interface MainLayoutProps {
 const PUBLIC_ROUTES = ['/login', '/signup'];
 
 export function MainLayout({ children }: MainLayoutProps) {
-  const { isAuthenticated, isLoading } = useAuth();
+  const { user, session, isLoading } = useAuth(); // Utilise user et session pour isAuthenticated
   const router = useRouter();
   const pathname = usePathname();
+
+  const isAuthenticated = !!user && !!session;
 
   useEffect(() => {
     if (!isLoading) {
@@ -33,12 +35,11 @@ export function MainLayout({ children }: MainLayoutProps) {
   if (isLoading) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background p-4">
-        {/* Basic Skeleton Loading for layout */}
         <div className="flex w-full h-full">
-          <Skeleton className="hidden md:block h-full w-[256px] mr-4" /> {/* Sidebar placeholder */}
+          <Skeleton className="hidden md:block h-full w-[256px] mr-4" /> 
           <div className="flex-1 space-y-4">
-            <Skeleton className="h-12 w-full" /> {/* Header/Toolbar placeholder */}
-            <Skeleton className="h-[400px] w-full" /> {/* Content placeholder */}
+            <Skeleton className="h-12 w-full" /> 
+            <Skeleton className="h-[400px] w-full" />
           </div>
         </div>
       </div>
@@ -47,23 +48,18 @@ export function MainLayout({ children }: MainLayoutProps) {
 
   const isPublicRouteCurrent = PUBLIC_ROUTES.includes(pathname);
 
-  // If not authenticated and trying to access a protected route,
-  // the useEffect above will redirect. This check prevents rendering protected layout parts.
   if (!isAuthenticated && !isPublicRouteCurrent) {
-     // Typically, redirection handles this, but as a fallback, render nothing or a minimal loader.
     return (
        <div className="flex min-h-screen items-center justify-center bg-background">
-        <p>Redirection...</p>
+        <p>Redirection...</p> {/* Ou un loader plus élaboré */}
       </div>
     );
   }
   
-  // For login/signup pages, render children without the main app layout (sidebar, etc.)
   if (isPublicRouteCurrent) {
     return <div className="min-h-screen bg-background">{children}</div>;
   }
 
-  // Authenticated user on a private route - render the full app layout
   return (
     <SidebarProvider defaultOpen={true}>
       <div className="flex min-h-screen bg-background print:block">

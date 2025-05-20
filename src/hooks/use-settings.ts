@@ -3,50 +3,98 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import type { AppSettings } from '@/types';
-
-const SETTINGS_KEY = 'gc_app_settings'; // GESTION CAISSE app settings
+import { supabase } from '@/lib/supabaseClient';
+import { useAuth } from './use-auth'; // Pour obtenir user.id
+import type { TablesInsert, TablesUpdate } from '@/types/supabase';
 
 const defaultSettings: AppSettings = {
-  companyName: "Mon Entreprise", // Default value
-  companyAddress: "123 Rue Principale, Ville, Pays", // Default value
+  companyName: "Mon Entreprise",
+  companyAddress: "123 Rue Principale, Ville, Pays",
 };
 
 export function useSettings() {
+  const { user } = useAuth();
   const [settings, setSettings] = useState<AppSettings>(defaultSettings);
   const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const fetchSettings = useCallback(async () => {
+    if (!user) {
+      setIsLoading(false);
+      return;
+    }
+    setIsLoading(true);
+    setError(null);
+    try {
+      const { data, error: fetchError } = await supabase
+        .from('app_settings')
+        .select('*')
+        .eq('user_id', user.id)
+        .single();
+
+      if (fetchError && fetchError.code !== 'PGRST116') { // PGRST116: no rows found
+        throw fetchError;
+      }
+      if (data) {
+        setSettings(data);
+      } else {
+        // Si aucune donnée, on utilise les valeurs par défaut et on essaie de les insérer
+        const initialSettingsData: TablesInsert<'app_settings'> = {
+            user_id: user.id,
+            company_name: defaultSettings.companyName,
+            company_address: defaultSettings.companyAddress,
+        };
+        await supabase.from('app_settings').insert(initialSettingsData);
+        setSettings(defaultSettings);
+      }
+    } catch (e: any) {
+      console.error("Erreur lors de la lecture des paramètres de l'application:", e);
+      setError(e.message || "Erreur de chargement des paramètres.");
+      setSettings(defaultSettings); // Fallback
+    } finally {
+      setIsLoading(false);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user]); // Dépendance à user
 
   useEffect(() => {
-    try {
-      const storedSettings = localStorage.getItem(SETTINGS_KEY);
-      if (storedSettings) {
-        setSettings(JSON.parse(storedSettings));
-      } else {
-        // If no settings found, save default settings to localStorage
-        localStorage.setItem(SETTINGS_KEY, JSON.stringify(defaultSettings));
-      }
-    } catch (error) {
-      console.error("Erreur lors de la lecture des paramètres de l'application:", error);
-      // Fallback to default settings and try to save them
-      localStorage.setItem(SETTINGS_KEY, JSON.stringify(defaultSettings));
-    }
-    setIsLoading(false);
-  }, []);
+    fetchSettings();
+  }, [fetchSettings]);
 
-  const updateSettings = useCallback((newSettings: Partial<AppSettings>) => {
-    try {
-      const updated = { ...settings, ...newSettings };
-      localStorage.setItem(SETTINGS_KEY, JSON.stringify(updated));
-      setSettings(updated);
-      return true;
-    } catch (error) {
-      console.error("Erreur lors de la sauvegarde des paramètres de l'application:", error);
+  const updateSettings = useCallback(async (newSettings: Partial<AppSettings>) => {
+    if (!user) {
+      setError("Utilisateur non authentifié.");
       return false;
     }
-  }, [settings]);
+    setError(null);
+    try {
+      const settingsUpdate: TablesUpdate<'app_settings'> = {
+        ...newSettings,
+        user_id: user.id, // Assurez-vous que user_id est inclus car c'est la PK
+        updated_at: new Date().toISOString(),
+      };
+
+      const { error: updateError } = await supabase
+        .from('app_settings')
+        .upsert(settingsUpdate, { onConflict: 'user_id' }); // Upsert pour créer si n'existe pas ou mettre à jour
+
+      if (updateError) throw updateError;
+      
+      // Re-fetch or update local state
+      setSettings(prev => ({ ...prev, ...newSettings }));
+      return true;
+    } catch (e: any) {
+      console.error("Erreur lors de la sauvegarde des paramètres de l'application:", e);
+      setError(e.message || "Erreur de sauvegarde des paramètres.");
+      return false;
+    }
+  }, [user, settings]);
 
   return {
     settings,
     isLoading,
+    error,
     updateSettings,
+    fetchSettings, // Exposer pour re-fetch manuel si besoin
   };
 }

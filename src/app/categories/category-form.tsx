@@ -1,3 +1,4 @@
+
 "use client";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
@@ -7,8 +8,9 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { Input } from "@/components/ui/input";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import type { Category } from "@/types";
-import { useCategories } from "@/lib/mock-data";
+import { useCategories } from "@/lib/mock-data"; // Updated path if you moved hooks
 import { useEffect } from "react";
+import { useToast } from "@/hooks/use-toast";
 
 const categoryFormSchema = z.object({
   name: z.string().min(1, "Le nom de la catégorie est requis.").max(50, "Le nom de la catégorie est trop long."),
@@ -24,6 +26,7 @@ interface CategoryFormProps {
 
 export function CategoryForm({ categoryToEdit, onFormSubmit }: CategoryFormProps) {
   const { addCategory, updateCategory } = useCategories();
+  const { toast } = useToast();
 
   const form = useForm<CategoryFormValues>({
     resolver: zodResolver(categoryFormSchema),
@@ -41,14 +44,28 @@ export function CategoryForm({ categoryToEdit, onFormSubmit }: CategoryFormProps
     }
   }, [categoryToEdit, form]);
 
-  function onSubmit(data: CategoryFormValues) {
+  async function onSubmit(data: CategoryFormValues) {
+    let success;
     if (categoryToEdit) {
-      updateCategory(categoryToEdit.id, data);
+      success = await updateCategory(categoryToEdit.id, data);
+      if (success) {
+        toast({ title: "Succès", description: "Catégorie modifiée." });
+      } else {
+        toast({ title: "Erreur", description: "Impossible de modifier la catégorie.", variant: "destructive" });
+      }
     } else {
-      addCategory(data);
+      const newCategory = await addCategory(data);
+      success = !!newCategory;
+      if (success) {
+        toast({ title: "Succès", description: "Catégorie ajoutée." });
+      } else {
+        toast({ title: "Erreur", description: "Impossible d'ajouter la catégorie.", variant: "destructive" });
+      }
     }
-    onFormSubmit();
-    form.reset({ name: "", type: "expense" });
+    if (success) {
+      onFormSubmit();
+      form.reset({ name: "", type: "expense" });
+    }
   }
 
   return (

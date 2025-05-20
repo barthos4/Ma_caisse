@@ -11,19 +11,21 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { useSettings } from "@/hooks/use-settings";
 import { useToast } from "@/hooks/use-toast";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { Separator } from "@/components/ui/separator";
+import { Loader2 } from "lucide-react";
 
 const settingsFormSchema = z.object({
-  companyName: z.string().max(100, "Le nom de l'entreprise est trop long.").optional(),
-  companyAddress: z.string().max(200, "L'adresse de l'entreprise est trop longue.").optional(),
+  companyName: z.string().max(100, "Le nom de l'entreprise est trop long.").optional().nullable(),
+  companyAddress: z.string().max(200, "L'adresse de l'entreprise est trop longue.").optional().nullable(),
 });
 
 type SettingsFormValues = z.infer<typeof settingsFormSchema>;
 
 export default function SettingsPage() {
-  const { settings, updateSettings, isLoading } = useSettings();
+  const { settings, updateSettings, isLoading: isLoadingSettings, error, fetchSettings } = useSettings();
   const { toast } = useToast();
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const form = useForm<SettingsFormValues>({
     resolver: zodResolver(settingsFormSchema),
@@ -34,21 +36,30 @@ export default function SettingsPage() {
   });
 
   useEffect(() => {
-    if (!isLoading) {
+    if (!isLoadingSettings) {
       form.reset({
         companyName: settings.companyName || "",
         companyAddress: settings.companyAddress || "",
       });
     }
-  }, [settings, isLoading, form]);
+  }, [settings, isLoadingSettings, form]);
 
-  function onSubmit(data: SettingsFormValues) {
-    const success = updateSettings(data);
+  useEffect(() => {
+    if (error) {
+        toast({ title: "Erreur Paramètres", description: error, variant: "destructive"})
+    }
+  }, [error, toast]);
+
+  async function onSubmit(data: SettingsFormValues) {
+    setIsSubmitting(true);
+    const success = await updateSettings(data);
+    setIsSubmitting(false);
     if (success) {
       toast({
         title: "Paramètres enregistrés",
         description: "Vos modifications ont été sauvegardées avec succès.",
       });
+      fetchSettings(); // Re-fetch to confirm and update local state if needed
     } else {
       toast({
         title: "Erreur",
@@ -58,10 +69,12 @@ export default function SettingsPage() {
     }
   }
 
-  if (isLoading) {
+  const isLoading = isLoadingSettings || isSubmitting;
+
+  if (isLoadingSettings && !settings.companyName) { // Affiche le loader seulement au premier chargement
     return (
-      <div className="space-y-6">
-        <h1 className="text-3xl font-bold tracking-tight">Paramètres</h1>
+      <div className="space-y-6 flex flex-col items-center justify-center min-h-[300px]">
+        <Loader2 className="h-12 w-12 animate-spin text-primary" />
         <p className="text-muted-foreground">Chargement des paramètres...</p>
       </div>
     );
@@ -93,7 +106,7 @@ export default function SettingsPage() {
                   <FormItem>
                     <FormLabel>Nom de l'entreprise</FormLabel>
                     <FormControl>
-                      <Input placeholder="Ex: GESTION CAISSE SARL" {...field} />
+                      <Input placeholder="Ex: GESTION CAISSE SARL" {...field} value={field.value ?? ""} disabled={isLoading} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -106,7 +119,7 @@ export default function SettingsPage() {
                   <FormItem>
                     <FormLabel>Adresse de l'entreprise</FormLabel>
                     <FormControl>
-                      <Textarea placeholder="Ex: B.P. 123, Avenue Principale, Quartier, Ville" {...field} />
+                      <Textarea placeholder="Ex: B.P. 123, Avenue Principale, Quartier, Ville" {...field} value={field.value ?? ""} disabled={isLoading} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -114,7 +127,10 @@ export default function SettingsPage() {
               />
             </CardContent>
             <CardFooter className="border-t px-6 py-4">
-              <Button type="submit">Enregistrer les Informations</Button>
+              <Button type="submit" disabled={isLoading}>
+                {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                Enregistrer les Informations
+              </Button>
             </CardFooter>
           </Card>
         </form>
@@ -133,21 +149,6 @@ export default function SettingsPage() {
           <p className="text-sm text-muted-foreground">
             Section en cours de développement. Vous pourrez bientôt choisir votre format de date préféré.
           </p>
-          {/* Exemple de ce qui pourrait être ici :
-          <div className="mt-4 space-y-2">
-            <Label htmlFor="date-format">Format de date</Label>
-            <Select disabled>
-              <SelectTrigger id="date-format">
-                <SelectValue placeholder="jj/mm/aaaa" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="dd/mm/yyyy">jj/mm/aaaa</SelectItem>
-                <SelectItem value="mm/dd/yyyy">mm/jj/aaaa</SelectItem>
-                <SelectItem value="yyyy-mm-dd">aaaa-mm-jj</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          */}
         </CardContent>
       </Card>
       
@@ -164,18 +165,6 @@ export default function SettingsPage() {
           <p className="text-sm text-muted-foreground">
             Section en cours de développement. Vous pourrez bientôt configurer les alertes et notifications.
           </p>
-          {/* Exemple :
-          <div className="mt-4 space-y-4">
-            <div className="flex items-center space-x-2">
-              <Switch id="email-notifications" disabled />
-              <Label htmlFor="email-notifications">Activer les notifications par e-mail</Label>
-            </div>
-            <div className="flex items-center space-x-2">
-              <Switch id="inapp-notifications" disabled />
-              <Label htmlFor="inapp-notifications">Activer les notifications dans l'application</Label>
-            </div>
-          </div>
-           */}
         </CardContent>
       </Card>
     </div>

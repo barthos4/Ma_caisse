@@ -12,7 +12,8 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { Input } from "@/components/ui/input";
 import { useAuth } from "@/hooks/use-auth";
 import Link from "next/link";
-import { Briefcase } from "lucide-react";
+import { Briefcase, Loader2 } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
 
 const signupFormSchema = z.object({
   email: z.string().email("L'adresse e-mail n'est pas valide."),
@@ -27,8 +28,12 @@ type SignupFormValues = z.infer<typeof signupFormSchema>;
 
 export default function SignupPage() {
   const router = useRouter();
-  const { signup } = useAuth();
+  const { signup, isLoading: isAuthLoading } = useAuth();
+  const { toast } = useToast();
   const [error, setError] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [signupMessage, setSignupMessage] = useState<string | null>(null);
+
 
   const form = useForm<SignupFormValues>({
     resolver: zodResolver(signupFormSchema),
@@ -41,14 +46,24 @@ export default function SignupPage() {
 
   async function onSubmit(data: SignupFormValues) {
     setError(null);
-    // In a real app, you'd call an API. Here, we simulate.
-    const success = await signup(data.email, data.password);
-    if (success) {
-      router.replace("/"); // Redirect to dashboard
+    setSignupMessage(null);
+    setIsSubmitting(true);
+    const { error: signupError } = await signup(data.email, data.password);
+    setIsSubmitting(false);
+    if (signupError) {
+      setError(signupError.message || "Une erreur s'est produite lors de l'inscription.");
     } else {
-      setError("Une erreur s'est produite lors de l'inscription."); // Generic error
+      // La redirection est gérée par useAuth si la connexion est automatique.
+      // Sinon, afficher un message pour vérifier l'email.
+      setSignupMessage("Inscription réussie ! Veuillez vérifier votre e-mail pour confirmer votre compte (si la confirmation est activée sur Supabase).");
+      toast({
+        title: "Inscription Réussie",
+        description: "Veuillez vérifier votre e-mail pour confirmer votre compte.",
+      });
+      // router.replace("/"); // Ne pas rediriger immédiatement si confirmation email
     }
   }
+  const isLoading = isAuthLoading || isSubmitting;
 
   return (
     <div className="flex min-h-screen flex-col items-center justify-center bg-background p-4">
@@ -70,7 +85,7 @@ export default function SignupPage() {
                   <FormItem>
                     <FormLabel>Email</FormLabel>
                     <FormControl>
-                      <Input type="email" placeholder="nom@exemple.com" {...field} />
+                      <Input type="email" placeholder="nom@exemple.com" {...field} disabled={isLoading} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -83,7 +98,7 @@ export default function SignupPage() {
                   <FormItem>
                     <FormLabel>Mot de passe</FormLabel>
                     <FormControl>
-                      <Input type="password" placeholder="********" {...field} />
+                      <Input type="password" placeholder="********" {...field} disabled={isLoading} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -96,14 +111,16 @@ export default function SignupPage() {
                   <FormItem>
                     <FormLabel>Confirmer le mot de passe</FormLabel>
                     <FormControl>
-                      <Input type="password" placeholder="********" {...field} />
+                      <Input type="password" placeholder="********" {...field} disabled={isLoading} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
                 )}
               />
               {error && <p className="text-sm font-medium text-destructive">{error}</p>}
-              <Button type="submit" className="w-full">
+              {signupMessage && <p className="text-sm font-medium text-green-600">{signupMessage}</p>}
+              <Button type="submit" className="w-full" disabled={isLoading}>
+                {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                 S'inscrire
               </Button>
             </form>

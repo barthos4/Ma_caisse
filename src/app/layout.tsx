@@ -4,6 +4,7 @@ import './globals.css';
 import { MainLayout } from '@/components/layout/main-layout';
 import { Toaster } from "@/components/ui/toaster";
 import { ThemeProvider } from "@/components/theme-provider";
+import { AuthProvider } from '@/hooks/use-auth'; // Import AuthProvider
 
 const inter = Inter({
   subsets: ['latin'],
@@ -29,7 +30,9 @@ export default function RootLayout({
           enableSystem
           disableTransitionOnChange
         >
-          <MainLayout>{children}</MainLayout>
+          <AuthProvider> {/* Envelopper MainLayout avec AuthProvider */}
+            <MainLayout>{children}</MainLayout>
+          </AuthProvider>
           <Toaster />
         </ThemeProvider>
       </body>

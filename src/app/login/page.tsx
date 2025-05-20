@@ -12,7 +12,7 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { Input } from "@/components/ui/input";
 import { useAuth } from "@/hooks/use-auth";
 import Link from "next/link";
-import { Briefcase } from "lucide-react";
+import { Briefcase, Loader2 } from "lucide-react";
 
 const loginFormSchema = z.object({
   email: z.string().email("L'adresse e-mail n'est pas valide."),
@@ -23,8 +23,9 @@ type LoginFormValues = z.infer<typeof loginFormSchema>;
 
 export default function LoginPage() {
   const router = useRouter();
-  const { login } = useAuth();
+  const { login, isLoading: isAuthLoading } = useAuth();
   const [error, setError] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const form = useForm<LoginFormValues>({
     resolver: zodResolver(loginFormSchema),
@@ -36,14 +37,18 @@ export default function LoginPage() {
 
   async function onSubmit(data: LoginFormValues) {
     setError(null);
-    // In a real app, you'd call an API. Here, we simulate.
-    const success = await login(data.email, data.password);
-    if (success) {
-      router.replace("/"); // Redirect to dashboard
+    setIsSubmitting(true);
+    const { error: loginError } = await login(data.email, data.password);
+    setIsSubmitting(false);
+    if (loginError) {
+      setError(loginError.message || "Email ou mot de passe incorrect.");
     } else {
-      setError("Email ou mot de passe incorrect."); // Generic error for simulation
+      // La redirection est gérée par le hook useAuth via onAuthStateChange
+      // router.replace("/"); 
     }
   }
+
+  const isLoading = isAuthLoading || isSubmitting;
 
   return (
     <div className="flex min-h-screen flex-col items-center justify-center bg-background p-4">
@@ -65,7 +70,7 @@ export default function LoginPage() {
                   <FormItem>
                     <FormLabel>Email</FormLabel>
                     <FormControl>
-                      <Input type="email" placeholder="nom@exemple.com" {...field} />
+                      <Input type="email" placeholder="nom@exemple.com" {...field} disabled={isLoading} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -78,14 +83,15 @@ export default function LoginPage() {
                   <FormItem>
                     <FormLabel>Mot de passe</FormLabel>
                     <FormControl>
-                      <Input type="password" placeholder="********" {...field} />
+                      <Input type="password" placeholder="********" {...field} disabled={isLoading} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
                 )}
               />
               {error && <p className="text-sm font-medium text-destructive">{error}</p>}
-              <Button type="submit" className="w-full">
+              <Button type="submit" className="w-full" disabled={isLoading}>
+                {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                 Se connecter
               </Button>
             </form>
