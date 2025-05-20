@@ -2,11 +2,13 @@
 "use client";
 
 import type { Transaction, Category } from '@/types';
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { supabase } from './supabaseClient';
 import { useAuth } from '@/hooks/use-auth.tsx';
 import type { Tables, TablesInsert, TablesUpdate } from '@/types/supabase';
-import { parseISO, isValid } from 'date-fns'; 
+import { parseISO, isValid, format, subMonths, addMonths, startOfMonth, endOfMonth, isSameMonth } from 'date-fns'; 
+import { fr } from 'date-fns/locale';
+import type { DateRange } from 'react-day-picker';
 
 
 // --- Categories ---
@@ -45,6 +47,7 @@ export const useCategories = () => {
     if (user) {
       fetchCategories();
     } else {
+      // Si l'utilisateur se déconnecte, vider les catégories et arrêter le chargement
       setIsLoading(false);
       setCategories([]);
     }
@@ -65,12 +68,10 @@ export const useCategories = () => {
       
       if (insertError) throw insertError;
       if (data) {
-        // Ensure correct typing for the returned category
         const addedCategory: Category = {
             id: data.id,
             name: data.name,
             type: data.type as 'income' | 'expense',
-            // user_id: data.user_id, // user_id is not part of Category type
         };
         setCategories(prev => [...prev, addedCategory].sort((a,b) => a.name.localeCompare(b.name, 'fr')));
         return addedCategory;
@@ -128,7 +129,6 @@ export const useCategories = () => {
 
       if (count && count > 0) {
         setError("Impossible de supprimer la catégorie car elle est utilisée dans des transactions.");
-        // alert("Impossible de supprimer la catégorie car elle est utilisée dans des transactions.");
         return false;
       }
       
@@ -153,13 +153,18 @@ export const useCategories = () => {
 
 
 // --- Transactions ---
+export interface TransactionFilters {
+  searchTerm?: string;
+  dateRange?: DateRange;
+}
+
 export const useTransactions = () => {
   const { user } = useAuth();
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const fetchTransactions = useCallback(async () => {
+  const fetchTransactions = useCallback(async (filters?: TransactionFilters) => {
     if (!user) {
       setTransactions([]);
       setIsLoading(false);
@@ -168,11 +173,23 @@ export const useTransactions = () => {
     setIsLoading(true);
     setError(null);
     try {
-      const { data, error: fetchError } = await supabase
+      let query = supabase
         .from('transactions')
         .select('*')
-        .eq('user_id', user.id)
-        .order('date', { ascending: false }); 
+        .eq('user_id', user.id);
+
+      if (filters?.searchTerm && filters.searchTerm.trim() !== '') {
+        const searchTerm = `%${filters.searchTerm.trim()}%`;
+        query = query.or(`description.ilike.${searchTerm},reference.ilike.${searchTerm}`);
+      }
+      if (filters?.dateRange?.from) {
+        query = query.gte('date', filters.dateRange.from.toISOString().split('T')[0]);
+      }
+      if (filters?.dateRange?.to) {
+        query = query.lte('date', filters.dateRange.to.toISOString().split('T')[0]);
+      }
+
+      const { data, error: fetchError } = await query.order('date', { ascending: false }); 
 
       if (fetchError) throw fetchError;
 
@@ -180,9 +197,9 @@ export const useTransactions = () => {
         const dateObj = parseISO(t.date);
         return {
           ...t,
-          date: isValid(dateObj) ? dateObj : new Date(), // Fallback to new Date() if parseISO fails
-          orderNumber: t.order_number || '', // Ensure orderNumber is string
-          categoryId: t.category_id || '', // Ensure categoryId is string
+          date: isValid(dateObj) ? dateObj : new Date(), 
+          orderNumber: t.order_number || '', 
+          categoryId: t.category_id || '', 
         } as Transaction; 
       });
       setTransactions(formattedData);
@@ -197,12 +214,12 @@ export const useTransactions = () => {
 
   useEffect(() => {
      if (user) {
-      fetchTransactions();
+      fetchTransactions(); // Fetch initial transactions without filters
     } else {
       setIsLoading(false);
       setTransactions([]);
     }
-  }, [user, fetchTransactions]);
+  }, [user, fetchTransactions]); // fetchTransactions is now stable due to useCallback
 
   const addTransaction = async (transactionData: Omit<Transaction, 'id' | 'user_id'>): Promise<Transaction | null> => {
     if (!user) {
@@ -210,16 +227,15 @@ export const useTransactions = () => {
       return null;
     }
 
-    // Explicitly construct the object for Supabase
     const newTransactionData: TablesInsert<'transactions'> = {
       user_id: user.id,
-      date: transactionData.date.toISOString().split('T')[0], // Format YYYY-MM-DD
+      date: transactionData.date.toISOString().split('T')[0],
       description: transactionData.description,
       amount: transactionData.amount,
       type: transactionData.type,
-      category_id: transactionData.categoryId || null, // categoryId from form is a string or null
-      order_number: transactionData.orderNumber || null, // orderNumber from form is string or null
-      reference: transactionData.reference || null,     // reference from form is string or null
+      category_id: transactionData.categoryId || null,
+      order_number: transactionData.orderNumber || null,
+      reference: transactionData.reference || null,
     };
 
     try {
@@ -238,7 +254,7 @@ export const useTransactions = () => {
         const dateObj = parseISO(data.date);
         const addedTransaction: Transaction = {
           id: data.id,
-          user_id: data.user_id,
+          // user_id: data.user_id, // Not part of Transaction type for client
           categoryId: data.category_id || '',
           orderNumber: data.order_number || '',
           date: isValid(dateObj) ? dateObj : new Date(),
@@ -247,12 +263,13 @@ export const useTransactions = () => {
           amount: data.amount,
           type: data.type as 'income' | 'expense',
         };
-        setTransactions(prev => [addedTransaction, ...prev].sort((a, b) => b.date.getTime() - a.date.getTime()));
+        // Optimistic update or re-fetch
+        // setTransactions(prev => [addedTransaction, ...prev].sort((a, b) => b.date.getTime() - a.date.getTime()));
+        fetchTransactions(); // Re-fetch to get the latest list including the new one with current filters
         return addedTransaction;
       }
       return null;
     } catch (e: any) {
-      // Log more detailed error if available
       const errorMessage = e.message || "Erreur d'ajout de transaction inconnue.";
       const errorDetails = e.details || (e.data ? JSON.stringify(e.data) : '');
       const errorCode = e.code || '';
@@ -293,13 +310,9 @@ export const useTransactions = () => {
 
       if (updateError) throw updateError;
       
-      setTransactions(prev => prev.map(t => {
-        if (t.id === id) {
-            const newDate = updatedData.date ? (isValid(updatedData.date) ? updatedData.date : t.date) : t.date;
-            return { ...t, ...updatedData, date: newDate } as Transaction;
-        }
-        return t;
-        }).sort((a, b) => b.date.getTime() - a.date.getTime()));
+      // Optimistic update or re-fetch
+      // setTransactions(prev => prev.map(t => { ... }).sort((a,b) => ...));
+      fetchTransactions(); // Re-fetch to get the latest list
       return true;
     } catch (e: any) {
       console.error("Erreur de mise à jour de transaction:", e.message || e);
@@ -321,7 +334,9 @@ export const useTransactions = () => {
         .eq('user_id', user.id);
 
       if (deleteError) throw deleteError;
-      setTransactions(prev => prev.filter(t => t.id !== id));
+      // Optimistic update or re-fetch
+      // setTransactions(prev => prev.filter(t => t.id !== id));
+      fetchTransactions(); // Re-fetch to get the latest list
       return true;
     } catch (e: any) {
       console.error("Erreur de suppression de transaction:", e.message || e);
@@ -339,57 +354,118 @@ export const useTransactions = () => {
     getTransactionById, 
     updateTransaction, 
     deleteTransaction,
-    fetchTransactions
+    fetchTransactions // Expose fetchTransactions for manual refresh or filtering
   };
 };
 
 
 // --- Derived Data & Helpers ---
+export interface MonthlyTrendData {
+  month: string;
+  income: number;
+  expenses: number;
+}
+
 export const useDashboardData = () => {
-  const { transactions, isLoading: isLoadingTransactions, error: errorTransactions, fetchTransactions } = useTransactions();
+  const { transactions, isLoading: isLoadingTransactionsHook, error: errorTransactionsHook, fetchTransactions: fetchTransactionsFromHook } = useTransactions();
   const { getCategoryById, isLoading: isLoadingCategories, error: errorCategories, fetchCategories } = useCategories();
   const { user } = useAuth();
 
-  // Refetch data if user changes or if an error occurs (could indicate stale data)
+  // Renommer pour éviter la confusion avec les variables locales
+  const [dashboardIsLoading, setDashboardIsLoading] = useState(true);
+  const [dashboardError, setDashboardError] = useState<string | null>(null);
+
   useEffect(() => {
-    if (user) {
-      fetchTransactions();
-      fetchCategories();
-    }
-  }, [user, fetchTransactions, fetchCategories]);
-
-
-  const isLoading = isLoadingTransactions || isLoadingCategories;
-  const error = errorTransactions || errorCategories;
-
-  let totalIncome = 0;
-  let totalExpenses = 0;
-
-  transactions.forEach(t => {
-    if (t.type === 'income') {
-      totalIncome += t.amount;
-    } else {
-      totalExpenses += t.amount;
-    }
-  });
+    const loadData = async () => {
+      if (user) {
+        setDashboardIsLoading(true);
+        setDashboardError(null);
+        try {
+          // Ces fonctions sont déjà appelées dans leurs hooks respectifs au changement de user
+          // Mais nous voulons nous assurer qu'elles sont à jour pour le dashboard
+          await fetchTransactionsFromHook(); // Assurez-vous que cela retourne une promesse ou gérez l'état de chargement
+          await fetchCategories(); // Idem
+        } catch (err: any) {
+          setDashboardError(err.message || "Erreur de chargement des données du tableau de bord");
+        } finally {
+          setDashboardIsLoading(isLoadingTransactionsHook || isLoadingCategories);
+        }
+      } else {
+        setDashboardIsLoading(false);
+      }
+    };
+    loadData();
+  }, [user, fetchTransactionsFromHook, fetchCategories, isLoadingCategories, isLoadingTransactionsHook]);
   
-  const currentBalance = totalIncome - totalExpenses;
+  const { totalIncome, totalExpenses, currentBalance } = useMemo(() => {
+    let income = 0;
+    let expenses = 0;
+    transactions.forEach(t => {
+      if (t.type === 'income') {
+        income += t.amount;
+      } else {
+        expenses += t.amount;
+      }
+    });
+    return { totalIncome: income, totalExpenses: expenses, currentBalance: income - expenses };
+  }, [transactions]);
 
-  // Sort transactions by date descending for recentTransactions
-  const sortedTransactions = [...transactions].sort((a,b) => b.date.getTime() - a.date.getTime());
-
-  const recentTransactions = sortedTransactions.slice(0, 5).map(t => ({
-    ...t,
-    categoryName: getCategoryById(t.categoryId!)?.name || 'Non classé' 
-  }));
+  const recentTransactions = useMemo(() => {
+    return [...transactions]
+      .sort((a, b) => b.date.getTime() - a.date.getTime())
+      .slice(0, 5)
+      .map(t => ({
+        ...t,
+        categoryName: getCategoryById(t.categoryId!)?.name || 'Non classé'
+      }));
+  }, [transactions, getCategoryById]);
   
-  const spendingSummary = transactions
-    .filter(t => t.type === 'expense' && t.categoryId)
-    .reduce((acc, t) => {
-      const categoryName = getCategoryById(t.categoryId!)?.name || 'Non classé';
-      acc[categoryName] = (acc[categoryName] || 0) + t.amount;
-      return acc;
-    }, {} as Record<string, number>);
+  const spendingSummary = useMemo(() => {
+    return transactions
+      .filter(t => t.type === 'expense' && t.categoryId)
+      .reduce((acc, t) => {
+        const categoryName = getCategoryById(t.categoryId!)?.name || 'Non classé';
+        acc[categoryName] = (acc[categoryName] || 0) + t.amount;
+        return acc;
+      }, {} as Record<string, number>);
+  }, [transactions, getCategoryById]);
 
-  return { currentBalance, totalIncome, totalExpenses, recentTransactions, spendingSummary, isLoading, error };
+  const monthlyTrendData = useMemo(() => {
+    if (!transactions || transactions.length === 0) return [];
+    const trend: MonthlyTrendData[] = [];
+    // Afficher les 6 derniers mois incluant le mois actuel
+    const firstMonth = startOfMonth(subMonths(new Date(), 5));
+
+    for (let i = 0; i < 6; i++) {
+      const currentMonthStart = startOfMonth(addMonths(firstMonth, i));
+      const currentMonthEnd = endOfMonth(currentMonthStart);
+      const monthKey = format(currentMonthStart, 'MMM yy', { locale: fr });
+      
+      let monthlyIncome = 0;
+      let monthlyExpenses = 0;
+
+      transactions.forEach(t => {
+        if (t.date >= currentMonthStart && t.date <= currentMonthEnd) {
+          if (t.type === 'income') {
+            monthlyIncome += t.amount;
+          } else {
+            monthlyExpenses += t.amount;
+          }
+        }
+      });
+      trend.push({ month: monthKey, income: monthlyIncome, expenses: monthlyExpenses });
+    }
+    return trend;
+  }, [transactions]);
+
+  return { 
+    currentBalance, 
+    totalIncome, 
+    totalExpenses, 
+    recentTransactions, 
+    spendingSummary, 
+    monthlyTrendData,
+    isLoading: dashboardIsLoading, 
+    error: dashboardError || errorTransactionsHook || errorCategories 
+  };
 };

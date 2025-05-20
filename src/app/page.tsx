@@ -4,16 +4,52 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
-import { TrendingUp, TrendingDown, DollarSign, List } from "lucide-react"; 
-import { useDashboardData } from "@/lib/mock-data";
-import { format } from 'date-fns';
+import { TrendingUp, TrendingDown, DollarSign, List, LineChart as LineChartIcon, Loader2 } from "lucide-react"; 
+import { useDashboardData, type MonthlyTrendData } from "@/lib/mock-data";
+import { format as formatDate } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { formatCurrencyCFA } from "@/lib/utils";
+import {
+  ChartContainer,
+  ChartTooltip as ShadTooltip,
+  ChartTooltipContent,
+  ChartLegend as ShadLegend,
+  ChartLegendContent,
+} from "@/components/ui/chart";
+import * as RechartsPrimitive from "recharts";
 
 export default function DashboardPage() {
-  const { currentBalance, totalIncome, totalExpenses, recentTransactions, spendingSummary } = useDashboardData();
+  const { currentBalance, totalIncome, totalExpenses, recentTransactions, spendingSummary, monthlyTrendData, isLoading, error } = useDashboardData();
 
   const totalSpendingFromSummary = Object.values(spendingSummary).reduce((sum, amount) => sum + amount, 0);
+
+  const chartConfig = {
+    income: {
+      label: "Revenus",
+      color: "hsl(var(--chart-2))", // Green
+    },
+    expenses: {
+      label: "Dépenses",
+      color: "hsl(var(--chart-5))", // Red
+    },
+  } satisfies Record<string, { label: string; color: string }>;
+
+
+  if (isLoading) {
+    return (
+      <div className="flex justify-center items-center h-64">
+        <Loader2 className="h-12 w-12 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="text-center text-destructive py-10">
+        <p>Erreur de chargement des données du tableau de bord: {error}</p>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -34,7 +70,7 @@ export default function DashboardPage() {
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Revenus Totaux</CardTitle>
+            <CardTitle className="text-sm font-medium">Revenus Totaux (Ce Mois)</CardTitle> {/* Préciser la période si pertinent */}
             <TrendingUp className="h-5 w-5 text-muted-foreground" />
           </CardHeader>
           <CardContent>
@@ -46,7 +82,7 @@ export default function DashboardPage() {
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Dépenses Totales</CardTitle>
+            <CardTitle className="text-sm font-medium">Dépenses Totales (Ce Mois)</CardTitle> {/* Préciser la période si pertinent */}
             <TrendingDown className="h-5 w-5 text-muted-foreground" />
           </CardHeader>
           <CardContent>
@@ -57,6 +93,74 @@ export default function DashboardPage() {
           </CardContent>
         </Card>
       </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Évolution Mensuelle (6 Derniers Mois)</CardTitle>
+          <CardDescription>Aperçu des revenus et dépenses sur les derniers mois.</CardDescription>
+        </CardHeader>
+        <CardContent className="h-[350px] w-full">
+          {monthlyTrendData && monthlyTrendData.length > 0 ? (
+            <ChartContainer config={chartConfig} className="w-full h-full">
+              <RechartsPrimitive.LineChart
+                accessibilityLayer
+                data={monthlyTrendData}
+                margin={{
+                  left: 12,
+                  right: 12,
+                  top: 12,
+                  bottom: 12,
+                }}
+              >
+                <RechartsPrimitive.CartesianGrid vertical={false} />
+                <RechartsPrimitive.XAxis
+                  dataKey="month"
+                  tickLine={false}
+                  axisLine={false}
+                  tickMargin={8}
+                  tickFormatter={(value) => value}
+                />
+                <RechartsPrimitive.YAxis
+                  tickLine={false}
+                  axisLine={false}
+                  tickMargin={8}
+                  tickFormatter={(value) => formatCurrencyCFA(value).replace(' F CFA', '')}
+                />
+                <ChartTooltipContent 
+                  formatter={(value, name) => (
+                    <div>
+                      <p className="font-medium">{chartConfig[name as keyof typeof chartConfig]?.label}</p>
+                      <p>{formatCurrencyCFA(value as number)}</p>
+                    </div>
+                  )}
+                  itemStyle={{textTransform: 'capitalize'}} 
+                />
+                <ShadLegend content={<ChartLegendContent />} />
+                <RechartsPrimitive.Line
+                  dataKey="income"
+                  type="monotone"
+                  stroke={chartConfig.income.color}
+                  strokeWidth={2}
+                  dot={true}
+                  name="Revenus"
+                />
+                <RechartsPrimitive.Line
+                  dataKey="expenses"
+                  type="monotone"
+                  stroke={chartConfig.expenses.color}
+                  strokeWidth={2}
+                  dot={true}
+                  name="Dépenses"
+                />
+              </RechartsPrimitive.LineChart>
+            </ChartContainer>
+          ) : (
+            <div className="flex items-center justify-center h-full">
+              <p className="text-muted-foreground">Pas de données de tendance mensuelle disponibles.</p>
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       <div className="grid gap-6 md:grid-cols-2">
         <Card>
@@ -83,7 +187,7 @@ export default function DashboardPage() {
                   <TableRow key={transaction.id}>
                     <TableCell>
                       <div className="font-medium">{transaction.description}</div>
-                      <div className="text-xs text-muted-foreground">{format(transaction.date, 'PP', { locale: fr })}</div>
+                      <div className="text-xs text-muted-foreground">{formatDate(transaction.date, 'PP', { locale: fr })}</div>
                     </TableCell>
                     <TableCell><Badge variant="outline">{transaction.categoryName}</Badge></TableCell>
                     <TableCell className={`text-right font-medium ${transaction.type === 'income' ? 'text-accent-foreground' : 'text-destructive'}`}>

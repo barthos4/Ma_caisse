@@ -18,6 +18,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { useSettings } from "@/hooks/use-settings";
 import { useBudgets } from "@/hooks/use-budgets.ts";
 import { useToast } from "@/hooks/use-toast";
+import { Progress } from "@/components/ui/progress"; // Import Progress component
 
 
 import jsPDF from 'jspdf';
@@ -36,7 +37,7 @@ interface EtatRow {
 
 export default function EtatsPage() {
   const { transactions, isLoading: isLoadingTransactions, error: errorTransactions, fetchTransactions } = useTransactions();
-  const { categories: allCategories, isLoading: isLoadingCategories, error: errorCategories, fetchCategories } = useCategories();
+  const { categories: allCategories, isLoading: isLoadingCategories, error: errorCategories, fetchCategories: fetchCategoriesHook } = useCategories();
   const { settings, isLoading: isLoadingSettings } = useSettings();
   const { budgets, fetchBudgetsForPeriod, upsertBudget, isLoadingBudgets, budgetError } = useBudgets();
   const { toast } = useToast();
@@ -53,12 +54,12 @@ export default function EtatsPage() {
 
   useEffect(() => {
     fetchTransactions();
-    fetchCategories();
+    fetchCategoriesHook();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); 
 
   useEffect(() => {
-    if (dateRange?.from && dateRange?.to) { // Assurez-vous que la plage de dates est complète
+    if (dateRange?.from && dateRange?.to) { 
       fetchBudgetsForPeriod(dateRange.from);
     }
   }, [dateRange, fetchBudgetsForPeriod]);
@@ -105,7 +106,7 @@ export default function EtatsPage() {
   }, [transactions, dateRange]);
 
   const handlePrevuChange = (categoryId: string, value: string, type: 'income' | 'expense') => {
-    const amount = parseFloat(value) || 0; // Mettre à jour l'état local immédiatement
+    const amount = parseFloat(value) || 0;
     if (type === 'income') {
       setPrevusRecettes(prev => ({ ...prev, [categoryId]: amount }));
     } else {
@@ -115,14 +116,13 @@ export default function EtatsPage() {
 
   const handleSaveBudget = async (categoryId: string, type: 'income' | 'expense') => {
     const amount = type === 'income' ? prevusRecettes[categoryId] : prevusDepenses[categoryId];
-    const numericAmount = Number(amount) || 0; // S'assurer que c'est un nombre
+    const numericAmount = Number(amount) || 0;
 
     if (dateRange?.from) {
       const result = await upsertBudget(categoryId, dateRange.from, numericAmount, type);
       if (!result) {
         toast({ title: "Erreur", description: `Impossible d'enregistrer le budget pour la catégorie. ${budgetError || ''}`, variant: "destructive"});
       }
-      // Optionnel: toast de succès, mais peut être bruyant pour les onBlur
       // else { toast({ title: "Budget Enregistré", description: "Le montant prévu a été sauvegardé."}); }
     } else {
       toast({ title: "Erreur", description: "Veuillez sélectionner une période valide pour enregistrer le budget.", variant: "destructive"});
@@ -237,7 +237,7 @@ export default function EtatsPage() {
       theme: 'grid',
       styles: {...tableCellStyles, fontStyle: 'bold' as const},
       columnStyles: { 
-        0: { cellWidth: 10 + 50 + 1.5 }, // Ajusté pour colSpan
+        0: { cellWidth: 10 + 50 + 1.5 }, 
         1: { cellWidth: 35, halign: 'right' as const },
         2: { cellWidth: 35, halign: 'right' as const },
         3: { cellWidth: 20 },
@@ -290,7 +290,7 @@ export default function EtatsPage() {
       theme: 'grid',
       styles: {...tableCellStyles, fontStyle: 'bold' as const},
       columnStyles: { 
-        0: { cellWidth: 10 + 50 + 1.5 }, // Ajusté pour colSpan
+        0: { cellWidth: 10 + 50 + 1.5 }, 
         1: { cellWidth: 35, halign: 'right' as const },
         2: { cellWidth: 35, halign: 'right' as const },
         3: { cellWidth: 20 },
@@ -389,42 +389,39 @@ export default function EtatsPage() {
     const currencyFormat = '#,##0 "F CFA"';
     const percentageFormat = '0%';
 
-    // Format Recettes
     for (let i = 0; i < wsDataRecettes.length; i++) {
-        const rowIndex = recettesStartRow + 1 + i; // +1 for table header
-        if (ws[`C${rowIndex}`]) ws[`C${rowIndex}`].z = currencyFormat; // Prévu
-        if (ws[`D${rowIndex}`]) ws[`D${rowIndex}`].z = currencyFormat; // Réalisé
-        if (ws[`E${rowIndex}`] && wsDataRecettes[i]["% Réal."] !== null) ws[`E${rowIndex}`].z = percentageFormat; // % Réal.
-        if (ws[`F${rowIndex}`] && wsDataRecettes[i]["Ecart"] !== null) ws[`F${rowIndex}`].z = currencyFormat; // Ecart
+        const rowIndex = recettesStartRow + 1 + i; 
+        if (ws[`C${rowIndex}`]) ws[`C${rowIndex}`].z = currencyFormat; 
+        if (ws[`D${rowIndex}`]) ws[`D${rowIndex}`].z = currencyFormat; 
+        if (ws[`E${rowIndex}`] && wsDataRecettes[i]["% Réal."] !== null) ws[`E${rowIndex}`].z = percentageFormat; 
+        if (ws[`F${rowIndex}`] && wsDataRecettes[i]["Ecart"] !== null) ws[`F${rowIndex}`].z = currencyFormat; 
     }
-    // Format Dépenses
     for (let i = 0; i < wsDataDepenses.length; i++) {
-        const rowIndex = depensesStartRow + 1 + i; // +1 for table header
+        const rowIndex = depensesStartRow + 1 + i; 
         if (ws[`C${rowIndex}`]) ws[`C${rowIndex}`].z = currencyFormat;
         if (ws[`D${rowIndex}`]) ws[`D${rowIndex}`].z = currencyFormat;
         if (ws[`E${rowIndex}`] && wsDataDepenses[i]["% Réal."] !== null) ws[`E${rowIndex}`].z = percentageFormat;
         if (ws[`F${rowIndex}`] && wsDataDepenses[i]["Ecart"] !== null) ws[`F${rowIndex}`].z = currencyFormat;
     }
     
-    // Format summary section
-    const balanceDataStartRow = summaryStartRow + 1; // After "BALANCE" title
-    if (ws[`B${balanceDataStartRow}`]) ws[`B${balanceDataStartRow}`].z = currencyFormat; // Total Recettes
-    if (ws[`B${balanceDataStartRow + 1}`]) ws[`B${balanceDataStartRow + 1}`].z = currencyFormat; // Total Dépenses
-    if (ws[`B${balanceDataStartRow + 2}`]) ws[`B${balanceDataStartRow + 2}`].z = currencyFormat; // Solde
+    const balanceDataStartRow = summaryStartRow + 1; 
+    if (ws[`B${balanceDataStartRow}`]) ws[`B${balanceDataStartRow}`].z = currencyFormat; 
+    if (ws[`B${balanceDataStartRow + 1}`]) ws[`B${balanceDataStartRow + 1}`].z = currencyFormat; 
+    if (ws[`B${balanceDataStartRow + 2}`]) ws[`B${balanceDataStartRow + 2}`].z = currencyFormat; 
 
     if(!ws['!merges']) ws['!merges'] = [];
-    ws['!merges'].push({s: {r:0, c:0}, e: {r:0, c:5}}); // Company Name
+    ws['!merges'].push({s: {r:0, c:0}, e: {r:0, c:5}}); 
     if (settings.companyAddress) {
-        ws['!merges'].push({s: {r:1, c:0}, e: {r:1, c:5}}); // Company Address
-        ws['!merges'].push({s: {r:2, c:0}, e: {r:2, c:5}}); // Etat Title
-        ws['!merges'].push({s: {r:3, c:0}, e: {r:3, c:5}}); // Export Date
+        ws['!merges'].push({s: {r:1, c:0}, e: {r:1, c:5}}); 
+        ws['!merges'].push({s: {r:2, c:0}, e: {r:2, c:5}}); 
+        ws['!merges'].push({s: {r:3, c:0}, e: {r:3, c:5}}); 
     } else {
-        ws['!merges'].push({s: {r:1, c:0}, e: {r:1, c:5}}); // Etat Title
-        ws['!merges'].push({s: {r:2, c:0}, e: {r:2, c:5}}); // Export Date
+        ws['!merges'].push({s: {r:1, c:0}, e: {r:1, c:5}}); 
+        ws['!merges'].push({s: {r:2, c:0}, e: {r:2, c:5}}); 
     }
     ws['!merges'].push({s: {r:recettesStartRow-1, c:0}, e: {r:recettesStartRow-1, c:5}}); 
     ws['!merges'].push({s: {r:depensesStartRow -1, c:0}, e: {r:depensesStartRow -1, c:5}}); 
-    ws['!merges'].push({s: {r:summaryStartRow -1, c:0}, e: {r:summaryStartRow -1, c:5}}); // Merge for "BALANCE" title
+    ws['!merges'].push({s: {r:summaryStartRow -1, c:0}, e: {r:summaryStartRow -1, c:5}}); 
     
     XLSX.utils.book_append_sheet(wb, ws, "Etat de Caisse");
     XLSX.writeFile(wb, "etat_de_caisse.xlsx");
@@ -448,6 +445,7 @@ export default function EtatsPage() {
               <TableHead className="print:text-black">{type === 'income' ? 'Types de recettes' : 'Types de dépenses'}</TableHead>
               <TableHead className="text-right print:text-black">Montant Prévu</TableHead>
               <TableHead className="text-right print:text-black">Montant Réalisé</TableHead>
+              <TableHead className="text-right print:text-black">Progression</TableHead> {/* Changed Header */}
               <TableHead className="text-right print:text-black">% Réal.</TableHead>
               <TableHead className="text-right print:text-black">Ecart</TableHead>
             </TableRow>
@@ -455,7 +453,7 @@ export default function EtatsPage() {
           <TableBody>
             {data.length === 0 && (
               <TableRow>
-                <TableCell colSpan={6} className="text-center text-muted-foreground h-20 print:text-black">
+                <TableCell colSpan={7} className="text-center text-muted-foreground h-20 print:text-black"> {/* Increased colSpan */}
                   Aucune catégorie de {type === 'income' ? 'recette' : 'dépense'}.
                 </TableCell>
               </TableRow>
@@ -476,6 +474,16 @@ export default function EtatsPage() {
                   />
                 </TableCell>
                 <TableCell className="text-right print:text-black">{formatCurrencyCFA(row.montantRealise)}</TableCell>
+                <TableCell className="text-right print:text-black w-32"> {/* Added Cell for Progress */}
+                  <Progress 
+                    value={row.montantPrevu > 0 ? Math.min((row.montantRealise / row.montantPrevu) * 100, 100) : (row.montantRealise > 0 ? 100 : 0)} 
+                    className="h-2 print:hidden" // Hide on print or style appropriately
+                    aria-label={`Progression ${row.type}`}
+                  />
+                   <span className="print:block hidden text-xs">
+                    {`${(row.montantPrevu > 0 ? Math.min((row.montantRealise / row.montantPrevu) * 100, 100) : (row.montantRealise > 0 ? 100 : 0)).toFixed(0)}%`}
+                  </span>
+                </TableCell>
                 <TableCell className="text-right print:text-black">{row.pourcentageRealisation.toFixed(0)}%</TableCell>
                 <TableCell className={`text-right print:text-black ${row.ecart < 0 ? 'text-destructive print:text-red-700' : 'text-accent-foreground print:text-green-700'}`}>
                   {formatCurrencyCFA(row.ecart)}
@@ -486,7 +494,7 @@ export default function EtatsPage() {
               <TableCell colSpan={2} className="print:text-black">{type === 'income' ? 'Total Recettes' : 'Total Dépenses'}</TableCell>
               <TableCell className="text-right print:text-black">{formatCurrencyCFA(totalPrevus)}</TableCell>
               <TableCell className="text-right print:text-black">{formatCurrencyCFA(totalRealises)}</TableCell>
-              <TableCell colSpan={2}></TableCell>
+              <TableCell colSpan={3}></TableCell> {/* Adjusted colSpan */}
             </TableRow>
           </TableBody>
         </Table>
@@ -623,4 +631,3 @@ export default function EtatsPage() {
     </div>
   );
 }
-
