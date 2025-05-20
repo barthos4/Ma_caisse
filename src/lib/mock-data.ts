@@ -4,9 +4,9 @@
 import type { Transaction, Category } from '@/types';
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from './supabaseClient';
-import { useAuth } from '@/hooks/use-auth.tsx'; // Updated import path
+import { useAuth } from '@/hooks/use-auth.tsx';
 import type { Tables, TablesInsert, TablesUpdate } from '@/types/supabase';
-import { parseISO } from 'date-fns'; // Pour convertir les strings de date de Supabase en objets Date
+import { parseISO, isValid } from 'date-fns'; 
 
 
 // --- Categories ---
@@ -34,20 +34,25 @@ export const useCategories = () => {
       if (fetchError) throw fetchError;
       setCategories(data || []);
     } catch (e: any) {
-      console.error("Erreur de chargement des catégories:", e);
-      setError(e.message || "Erreur de chargement.");
+      console.error("Erreur de chargement des catégories:", e.message || e);
+      setError(e.message || "Erreur de chargement des catégories.");
     } finally {
       setIsLoading(false);
     }
   }, [user]);
 
   useEffect(() => {
-    fetchCategories();
-  }, [fetchCategories]);
+    if (user) {
+      fetchCategories();
+    } else {
+      setIsLoading(false);
+      setCategories([]);
+    }
+  }, [user, fetchCategories]);
 
   const addCategory = async (categoryData: Omit<Category, 'id' | 'user_id'>): Promise<Category | null> => {
     if (!user) {
-      setError("Utilisateur non authentifié.");
+      setError("Utilisateur non authentifié pour ajouter une catégorie.");
       return null;
     }
     const newCategoryData: TablesInsert<'categories'> = { ...categoryData, user_id: user.id };
@@ -60,13 +65,20 @@ export const useCategories = () => {
       
       if (insertError) throw insertError;
       if (data) {
-        setCategories(prev => [...prev, data].sort((a,b) => a.name.localeCompare(b.name, 'fr')));
-        return data;
+        // Ensure correct typing for the returned category
+        const addedCategory: Category = {
+            id: data.id,
+            name: data.name,
+            type: data.type as 'income' | 'expense',
+            // user_id: data.user_id, // user_id is not part of Category type
+        };
+        setCategories(prev => [...prev, addedCategory].sort((a,b) => a.name.localeCompare(b.name, 'fr')));
+        return addedCategory;
       }
       return null;
     } catch (e: any) {
-      console.error("Erreur d'ajout de catégorie:", e);
-      setError(e.message || "Erreur d'ajout.");
+      console.error("Erreur d'ajout de catégorie:", e.message || e);
+      setError(e.message || "Erreur d'ajout de catégorie.");
       return null;
     }
   };
@@ -77,7 +89,7 @@ export const useCategories = () => {
   
   const updateCategory = async (id: string, updatedData: Partial<Omit<Category, 'id' | 'user_id'>>): Promise<boolean> => {
      if (!user) {
-      setError("Utilisateur non authentifié.");
+      setError("Utilisateur non authentifié pour modifier une catégorie.");
       return false;
     }
     const categoryUpdate: TablesUpdate<'categories'> = { ...updatedData, updated_at: new Date().toISOString() };
@@ -86,38 +98,40 @@ export const useCategories = () => {
         .from('categories')
         .update(categoryUpdate)
         .eq('id', id)
-        .eq('user_id', user.id); // Assurer que l'utilisateur modifie sa propre catégorie
+        .eq('user_id', user.id); 
 
       if (updateError) throw updateError;
       
-      setCategories(prev => prev.map(c => c.id === id ? { ...c, ...updatedData } : c).sort((a,b) => a.name.localeCompare(b.name, 'fr')));
+      setCategories(prev => prev.map(c => c.id === id ? { ...c, ...updatedData } as Category : c).sort((a,b) => a.name.localeCompare(b.name, 'fr')));
       return true;
     } catch (e: any) {
-      console.error("Erreur de mise à jour de catégorie:", e);
-      setError(e.message || "Erreur de mise à jour.");
+      console.error("Erreur de mise à jour de catégorie:", e.message || e);
+      setError(e.message || "Erreur de mise à jour de catégorie.");
       return false;
     }
   };
 
   const deleteCategory = async (id: string): Promise<boolean> => {
     if (!user) {
-      setError("Utilisateur non authentifié.");
-      return false;
-    }
-    // Vérifier si la catégorie est utilisée (côté client pour l'instant)
-    // Idéalement, cela devrait être géré par des contraintes de DB ou une logique backend
-    const transactionsUsingCategory = await supabase
-        .from('transactions')
-        .select('id', { count: 'exact' })
-        .eq('category_id', id)
-        .eq('user_id', user.id);
-
-    if (transactionsUsingCategory.count && transactionsUsingCategory.count > 0) {
-      alert("Impossible de supprimer la catégorie car elle est utilisée dans des transactions.");
+      setError("Utilisateur non authentifié pour supprimer une catégorie.");
       return false;
     }
     
     try {
+      const { count, error: checkError } = await supabase
+        .from('transactions')
+        .select('id', { count: 'exact', head: true })
+        .eq('category_id', id)
+        .eq('user_id', user.id);
+
+      if (checkError) throw checkError;
+
+      if (count && count > 0) {
+        setError("Impossible de supprimer la catégorie car elle est utilisée dans des transactions.");
+        // alert("Impossible de supprimer la catégorie car elle est utilisée dans des transactions.");
+        return false;
+      }
+      
       const { error: deleteError } = await supabase
         .from('categories')
         .delete()
@@ -128,8 +142,8 @@ export const useCategories = () => {
       setCategories(prev => prev.filter(c => c.id !== id));
       return true;
     } catch (e: any) {
-      console.error("Erreur de suppression de catégorie:", e);
-      setError(e.message || "Erreur de suppression.");
+      console.error("Erreur de suppression de catégorie:", e.message || e);
+      setError(e.message || "Erreur de suppression de catégorie.");
       return false;
     }
   };
@@ -158,44 +172,55 @@ export const useTransactions = () => {
         .from('transactions')
         .select('*')
         .eq('user_id', user.id)
-        .order('date', { ascending: false }); // Les plus récentes en premier pour l'affichage principal
+        .order('date', { ascending: false }); 
 
       if (fetchError) throw fetchError;
 
-      // Convertir les dates de string en objets Date
-      const formattedData = (data || []).map(t => ({
-        ...t,
-        date: parseISO(t.date), // t.date est un string 'YYYY-MM-DD'
-      }));
-      setTransactions(formattedData as Transaction[]); // Cast après formatage
+      const formattedData = (data || []).map(t => {
+        const dateObj = parseISO(t.date);
+        return {
+          ...t,
+          date: isValid(dateObj) ? dateObj : new Date(), // Fallback to new Date() if parseISO fails
+          orderNumber: t.order_number || '', // Ensure orderNumber is string
+          categoryId: t.category_id || '', // Ensure categoryId is string
+        } as Transaction; 
+      });
+      setTransactions(formattedData);
 
     } catch (e: any) {
-      console.error("Erreur de chargement des transactions:", e);
-      setError(e.message || "Erreur de chargement.");
+      console.error("Erreur de chargement des transactions:", e.message || e);
+      setError(e.message || "Erreur de chargement des transactions.");
     } finally {
       setIsLoading(false);
     }
   }, [user]);
 
   useEffect(() => {
-    fetchTransactions();
-  }, [fetchTransactions]);
+     if (user) {
+      fetchTransactions();
+    } else {
+      setIsLoading(false);
+      setTransactions([]);
+    }
+  }, [user, fetchTransactions]);
 
   const addTransaction = async (transactionData: Omit<Transaction, 'id' | 'user_id'>): Promise<Transaction | null> => {
     if (!user) {
-      setError("Utilisateur non authentifié.");
+      setError("Utilisateur non authentifié pour ajouter une transaction.");
       return null;
     }
+
+    // Explicitly construct the object for Supabase
     const newTransactionData: TablesInsert<'transactions'> = {
-      ...transactionData,
       user_id: user.id,
       date: transactionData.date.toISOString().split('T')[0], // Format YYYY-MM-DD
-      category_id: transactionData.categoryId || null,
-      order_number: transactionData.orderNumber || null, // N° d'ordre est optionnel
-      reference: transactionData.reference || null,
+      description: transactionData.description,
+      amount: transactionData.amount,
+      type: transactionData.type,
+      category_id: transactionData.categoryId || null, // categoryId from form is a string or null
+      order_number: transactionData.orderNumber || null, // orderNumber from form is string or null
+      reference: transactionData.reference || null,     // reference from form is string or null
     };
-    // @ts-ignore
-    delete newTransactionData.categoryId; // Supabase attend category_id, pas categoryId
 
     try {
       const { data, error: insertError } = await supabase
@@ -204,20 +229,39 @@ export const useTransactions = () => {
         .select()
         .single();
       
-      if (insertError) throw insertError;
+      if (insertError) {
+        console.error("Erreur Supabase lors de l'ajout:", insertError);
+        throw insertError;
+      }
 
       if (data) {
-        const addedTransaction = { ...data, date: parseISO(data.date) } as Transaction;
+        const dateObj = parseISO(data.date);
+        const addedTransaction: Transaction = {
+          id: data.id,
+          user_id: data.user_id,
+          categoryId: data.category_id || '',
+          orderNumber: data.order_number || '',
+          date: isValid(dateObj) ? dateObj : new Date(),
+          description: data.description,
+          reference: data.reference || undefined,
+          amount: data.amount,
+          type: data.type as 'income' | 'expense',
+        };
         setTransactions(prev => [addedTransaction, ...prev].sort((a, b) => b.date.getTime() - a.date.getTime()));
         return addedTransaction;
       }
       return null;
     } catch (e: any) {
-      console.error("Erreur d'ajout de transaction:", e);
-      setError(e.message || "Erreur d'ajout.");
+      // Log more detailed error if available
+      const errorMessage = e.message || "Erreur d'ajout de transaction inconnue.";
+      const errorDetails = e.details || (e.data ? JSON.stringify(e.data) : '');
+      const errorCode = e.code || '';
+      console.error(`Erreur d'ajout de transaction: ${errorMessage}`, `Code: ${errorCode}`, `Détails: ${errorDetails}`, e);
+      setError(`${errorMessage}${errorDetails ? ` (Détails: ${errorDetails})` : ''}`);
       return null;
     }
   };
+
 
   const getTransactionById = (id: string): Transaction | undefined => {
     return transactions.find(t => t.id === id);
@@ -225,21 +269,20 @@ export const useTransactions = () => {
 
   const updateTransaction = async (id: string, updatedData: Partial<Omit<Transaction, 'id' | 'user_id'>>): Promise<boolean> => {
     if (!user) {
-      setError("Utilisateur non authentifié.");
+      setError("Utilisateur non authentifié pour modifier une transaction.");
       return false;
     }
     
     const transactionUpdate: TablesUpdate<'transactions'> = {
-        ...updatedData,
         updated_at: new Date().toISOString(),
         ...(updatedData.date && { date: updatedData.date.toISOString().split('T')[0] }),
+        ...(updatedData.description && { description: updatedData.description }),
+        ...(updatedData.amount && { amount: updatedData.amount }),
+        ...(updatedData.type && { type: updatedData.type }),
         ...(updatedData.categoryId && { category_id: updatedData.categoryId }),
-        order_number: updatedData.orderNumber || null, // N° d'ordre est optionnel
-        reference: updatedData.reference || null,
+        ...(updatedData.hasOwnProperty('orderNumber') && { order_number: updatedData.orderNumber || null }),
+        ...(updatedData.hasOwnProperty('reference') && { reference: updatedData.reference || null }),
     };
-    // @ts-ignore
-    if ('categoryId' in transactionUpdate) delete transactionUpdate.categoryId;
-
 
     try {
       const { error: updateError } = await supabase
@@ -250,19 +293,24 @@ export const useTransactions = () => {
 
       if (updateError) throw updateError;
       
-      setTransactions(prev => prev.map(t => t.id === id ? { ...t, ...updatedData, date: updatedData.date || t.date } : t)
-                                 .sort((a, b) => b.date.getTime() - a.date.getTime()));
+      setTransactions(prev => prev.map(t => {
+        if (t.id === id) {
+            const newDate = updatedData.date ? (isValid(updatedData.date) ? updatedData.date : t.date) : t.date;
+            return { ...t, ...updatedData, date: newDate } as Transaction;
+        }
+        return t;
+        }).sort((a, b) => b.date.getTime() - a.date.getTime()));
       return true;
     } catch (e: any) {
-      console.error("Erreur de mise à jour de transaction:", e);
-      setError(e.message || "Erreur de mise à jour.");
+      console.error("Erreur de mise à jour de transaction:", e.message || e);
+      setError(e.message || "Erreur de mise à jour de transaction.");
       return false;
     }
   };
 
   const deleteTransaction = async (id: string): Promise<boolean> => {
     if (!user) {
-      setError("Utilisateur non authentifié.");
+      setError("Utilisateur non authentifié pour supprimer une transaction.");
       return false;
     }
     try {
@@ -276,8 +324,8 @@ export const useTransactions = () => {
       setTransactions(prev => prev.filter(t => t.id !== id));
       return true;
     } catch (e: any) {
-      console.error("Erreur de suppression de transaction:", e);
-      setError(e.message || "Erreur de suppression.");
+      console.error("Erreur de suppression de transaction:", e.message || e);
+      setError(e.message || "Erreur de suppression de transaction.");
       return false;
     }
   };
@@ -298,8 +346,18 @@ export const useTransactions = () => {
 
 // --- Derived Data & Helpers ---
 export const useDashboardData = () => {
-  const { transactions, isLoading: isLoadingTransactions, error: errorTransactions } = useTransactions();
-  const { categories, getCategoryById, isLoading: isLoadingCategories, error: errorCategories } = useCategories();
+  const { transactions, isLoading: isLoadingTransactions, error: errorTransactions, fetchTransactions } = useTransactions();
+  const { getCategoryById, isLoading: isLoadingCategories, error: errorCategories, fetchCategories } = useCategories();
+  const { user } = useAuth();
+
+  // Refetch data if user changes or if an error occurs (could indicate stale data)
+  useEffect(() => {
+    if (user) {
+      fetchTransactions();
+      fetchCategories();
+    }
+  }, [user, fetchTransactions, fetchCategories]);
+
 
   const isLoading = isLoadingTransactions || isLoadingCategories;
   const error = errorTransactions || errorCategories;
@@ -317,9 +375,12 @@ export const useDashboardData = () => {
   
   const currentBalance = totalIncome - totalExpenses;
 
-  const recentTransactions = transactions.slice(0, 5).map(t => ({
+  // Sort transactions by date descending for recentTransactions
+  const sortedTransactions = [...transactions].sort((a,b) => b.date.getTime() - a.date.getTime());
+
+  const recentTransactions = sortedTransactions.slice(0, 5).map(t => ({
     ...t,
-    categoryName: getCategoryById(t.categoryId!)?.name || 'N/A' // categoryId peut être null
+    categoryName: getCategoryById(t.categoryId!)?.name || 'Non classé' 
   }));
   
   const spendingSummary = transactions
