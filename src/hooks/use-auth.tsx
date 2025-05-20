@@ -4,7 +4,7 @@
 import { useState, useEffect, useCallback, createContext, useContext, type ReactNode } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import { supabase } from '@/lib/supabaseClient';
-import type { AuthChangeEvent, Session, User, AuthError as SupabaseAuthError } from '@supabase/supabase-js';
+import type { AuthChangeEvent, Session, User, AuthError as SupabaseAuthError, Subscription } from '@supabase/supabase-js';
 
 // Explicitly type AuthError to match what Supabase returns, which extends Error
 type AuthError = SupabaseAuthError | Error | null;
@@ -38,7 +38,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     getInitialSession();
 
-    const { data: authListener } = supabase.auth.onAuthStateChange(
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event: AuthChangeEvent, sessionState: Session | null) => {
         setSession(sessionState);
         setUser(sessionState?.user ?? null);
@@ -57,7 +57,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     );
 
     return () => {
-      authListener?.unsubscribe();
+      subscription?.unsubscribe();
     };
   }, [router, pathname]);
 
