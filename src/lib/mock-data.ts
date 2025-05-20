@@ -6,7 +6,7 @@ import { useState, useEffect, useCallback, useMemo } from 'react';
 import { supabase } from './supabaseClient';
 import { useAuth } from '@/hooks/use-auth.tsx';
 import type { Tables, TablesInsert, TablesUpdate } from '@/types/supabase';
-import { parseISO, isValid, format, subMonths, addMonths, startOfMonth, endOfMonth, isSameMonth } from 'date-fns'; 
+import { parseISO, isValid, format, subMonths, addMonths, startOfMonth, endOfMonth } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import type { DateRange } from 'react-day-picker';
 
@@ -15,17 +15,17 @@ import type { DateRange } from 'react-day-picker';
 export const useCategories = () => {
   const { user } = useAuth();
   const [categories, setCategories] = useState<Category[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [isLoadingCategories, setIsLoadingCategories] = useState(true);
+  const [errorCategories, setErrorCategories] = useState<string | null>(null);
 
   const fetchCategories = useCallback(async () => {
     if (!user) {
       setCategories([]);
-      setIsLoading(false);
+      setIsLoadingCategories(false);
       return;
     }
-    setIsLoading(true);
-    setError(null);
+    setIsLoadingCategories(true);
+    setErrorCategories(null);
     try {
       const { data, error: fetchError } = await supabase
         .from('categories')
@@ -36,10 +36,10 @@ export const useCategories = () => {
       if (fetchError) throw fetchError;
       setCategories(data || []);
     } catch (e: any) {
-      console.error("Erreur de chargement des catégories:", e.message || e);
-      setError(e.message || "Erreur de chargement des catégories.");
+      console.error("Erreur de chargement des catégories:", e);
+      setErrorCategories(e.message || "Erreur de chargement des catégories.");
     } finally {
-      setIsLoading(false);
+      setIsLoadingCategories(false);
     }
   }, [user]);
 
@@ -47,15 +47,14 @@ export const useCategories = () => {
     if (user) {
       fetchCategories();
     } else {
-      // Si l'utilisateur se déconnecte, vider les catégories et arrêter le chargement
-      setIsLoading(false);
+      setIsLoadingCategories(false);
       setCategories([]);
     }
   }, [user, fetchCategories]);
 
   const addCategory = async (categoryData: Omit<Category, 'id' | 'user_id'>): Promise<Category | null> => {
     if (!user) {
-      setError("Utilisateur non authentifié pour ajouter une catégorie.");
+      setErrorCategories("Utilisateur non authentifié pour ajouter une catégorie.");
       return null;
     }
     const newCategoryData: TablesInsert<'categories'> = { ...categoryData, user_id: user.id };
@@ -73,13 +72,14 @@ export const useCategories = () => {
             name: data.name,
             type: data.type as 'income' | 'expense',
         };
-        setCategories(prev => [...prev, addedCategory].sort((a,b) => a.name.localeCompare(b.name, 'fr')));
+        // Optimistic update or re-fetch
+        fetchCategories(); // Re-fetch for consistency
         return addedCategory;
       }
       return null;
     } catch (e: any) {
-      console.error("Erreur d'ajout de catégorie:", e.message || e);
-      setError(e.message || "Erreur d'ajout de catégorie.");
+      console.error("Erreur d'ajout de catégorie:", e);
+      setErrorCategories(e.message || "Erreur d'ajout de catégorie.");
       return null;
     }
   };
@@ -90,7 +90,7 @@ export const useCategories = () => {
   
   const updateCategory = async (id: string, updatedData: Partial<Omit<Category, 'id' | 'user_id'>>): Promise<boolean> => {
      if (!user) {
-      setError("Utilisateur non authentifié pour modifier une catégorie.");
+      setErrorCategories("Utilisateur non authentifié pour modifier une catégorie.");
       return false;
     }
     const categoryUpdate: TablesUpdate<'categories'> = { ...updatedData, updated_at: new Date().toISOString() };
@@ -102,19 +102,18 @@ export const useCategories = () => {
         .eq('user_id', user.id); 
 
       if (updateError) throw updateError;
-      
-      setCategories(prev => prev.map(c => c.id === id ? { ...c, ...updatedData } as Category : c).sort((a,b) => a.name.localeCompare(b.name, 'fr')));
+      fetchCategories(); // Re-fetch for consistency
       return true;
     } catch (e: any) {
-      console.error("Erreur de mise à jour de catégorie:", e.message || e);
-      setError(e.message || "Erreur de mise à jour de catégorie.");
+      console.error("Erreur de mise à jour de catégorie:", e);
+      setErrorCategories(e.message || "Erreur de mise à jour de catégorie.");
       return false;
     }
   };
 
   const deleteCategory = async (id: string): Promise<boolean> => {
     if (!user) {
-      setError("Utilisateur non authentifié pour supprimer une catégorie.");
+      setErrorCategories("Utilisateur non authentifié pour supprimer une catégorie.");
       return false;
     }
     
@@ -128,7 +127,7 @@ export const useCategories = () => {
       if (checkError) throw checkError;
 
       if (count && count > 0) {
-        setError("Impossible de supprimer la catégorie car elle est utilisée dans des transactions.");
+        setErrorCategories("Impossible de supprimer la catégorie car elle est utilisée dans des transactions.");
         return false;
       }
       
@@ -139,16 +138,25 @@ export const useCategories = () => {
         .eq('user_id', user.id);
 
       if (deleteError) throw deleteError;
-      setCategories(prev => prev.filter(c => c.id !== id));
+      fetchCategories(); // Re-fetch for consistency
       return true;
     } catch (e: any) {
-      console.error("Erreur de suppression de catégorie:", e.message || e);
-      setError(e.message || "Erreur de suppression de catégorie.");
+      console.error("Erreur de suppression de catégorie:", e);
+      setErrorCategories(e.message || "Erreur de suppression de catégorie.");
       return false;
     }
   };
 
-  return { categories, getCategories: () => categories, isLoading, error, addCategory, getCategoryById, updateCategory, deleteCategory, fetchCategories };
+  return { 
+    categories, 
+    isLoadingCategories, 
+    errorCategories, 
+    addCategory, 
+    getCategoryById, 
+    updateCategory, 
+    deleteCategory, 
+    fetchCategories 
+  };
 };
 
 
@@ -161,17 +169,17 @@ export interface TransactionFilters {
 export const useTransactions = () => {
   const { user } = useAuth();
   const [transactions, setTransactions] = useState<Transaction[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [isLoadingTransactions, setIsLoadingTransactions] = useState(true);
+  const [errorTransactions, setErrorTransactions] = useState<string | null>(null);
 
   const fetchTransactions = useCallback(async (filters?: TransactionFilters) => {
     if (!user) {
       setTransactions([]);
-      setIsLoading(false);
+      setIsLoadingTransactions(false);
       return;
     }
-    setIsLoading(true);
-    setError(null);
+    setIsLoadingTransactions(true);
+    setErrorTransactions(null);
     try {
       let query = supabase
         .from('transactions')
@@ -191,39 +199,58 @@ export const useTransactions = () => {
 
       const { data, error: fetchError } = await query.order('date', { ascending: false }); 
 
-      if (fetchError) throw fetchError;
+      if (fetchError) {
+        console.error('Supabase fetch error (transactions):', fetchError);
+        throw fetchError;
+      }
 
       const formattedData = (data || []).map(t => {
-        const dateObj = parseISO(t.date);
+        const dateObj = parseISO(t.date as string); // Assuming t.date is string from Supabase
         return {
           ...t,
           date: isValid(dateObj) ? dateObj : new Date(), 
           orderNumber: t.order_number || '', 
           categoryId: t.category_id || '', 
+          // Ensure all fields from Transaction type are mapped
+          amount: t.amount,
+          description: t.description,
+          id: t.id,
+          reference: t.reference || undefined,
+          type: t.type as 'income' | 'expense',
         } as Transaction; 
       });
       setTransactions(formattedData);
 
     } catch (e: any) {
-      console.error("Erreur de chargement des transactions:", e.message || e);
-      setError(e.message || "Erreur de chargement des transactions.");
+      console.error("Erreur détaillée de chargement des transactions:", e);
+      let displayError = "Erreur de chargement des transactions.";
+      if (e && e.message) {
+        if (e.message.toLowerCase().includes("failed to fetch")) {
+          displayError = "Erreur de réseau : Impossible de joindre le serveur de données. Vérifiez votre connexion internet et les paramètres de Supabase.";
+        } else {
+          displayError = e.message; // Other types of errors (e.g., Supabase specific errors)
+        }
+      } else if (typeof e === 'string') {
+        displayError = e;
+      }
+      setErrorTransactions(displayError);
     } finally {
-      setIsLoading(false);
+      setIsLoadingTransactions(false);
     }
   }, [user]);
 
   useEffect(() => {
      if (user) {
-      fetchTransactions(); // Fetch initial transactions without filters
+      fetchTransactions();
     } else {
-      setIsLoading(false);
+      setIsLoadingTransactions(false);
       setTransactions([]);
     }
-  }, [user, fetchTransactions]); // fetchTransactions is now stable due to useCallback
+  }, [user, fetchTransactions]);
 
   const addTransaction = async (transactionData: Omit<Transaction, 'id' | 'user_id'>): Promise<Transaction | null> => {
     if (!user) {
-      setError("Utilisateur non authentifié pour ajouter une transaction.");
+      setErrorTransactions("Utilisateur non authentifié pour ajouter une transaction.");
       return null;
     }
 
@@ -246,15 +273,15 @@ export const useTransactions = () => {
         .single();
       
       if (insertError) {
-        console.error("Erreur Supabase lors de l'ajout:", insertError);
+        console.error("Erreur Supabase lors de l'ajout de transaction:", insertError);
         throw insertError;
       }
 
       if (data) {
-        const dateObj = parseISO(data.date);
-        const addedTransaction: Transaction = {
+        fetchTransactions(); // Re-fetch to update list
+        const dateObj = parseISO(data.date as string);
+        return {
           id: data.id,
-          // user_id: data.user_id, // Not part of Transaction type for client
           categoryId: data.category_id || '',
           orderNumber: data.order_number || '',
           date: isValid(dateObj) ? dateObj : new Date(),
@@ -263,18 +290,17 @@ export const useTransactions = () => {
           amount: data.amount,
           type: data.type as 'income' | 'expense',
         };
-        // Optimistic update or re-fetch
-        // setTransactions(prev => [addedTransaction, ...prev].sort((a, b) => b.date.getTime() - a.date.getTime()));
-        fetchTransactions(); // Re-fetch to get the latest list including the new one with current filters
-        return addedTransaction;
       }
       return null;
     } catch (e: any) {
-      const errorMessage = e.message || "Erreur d'ajout de transaction inconnue.";
-      const errorDetails = e.details || (e.data ? JSON.stringify(e.data) : '');
-      const errorCode = e.code || '';
-      console.error(`Erreur d'ajout de transaction: ${errorMessage}`, `Code: ${errorCode}`, `Détails: ${errorDetails}`, e);
-      setError(`${errorMessage}${errorDetails ? ` (Détails: ${errorDetails})` : ''}`);
+      const supabaseError = e as { message?: string; details?: string; code?: string; hint?: string };
+      const errorMessage = supabaseError.message || "Erreur d'ajout de transaction inconnue.";
+      const errorDetails = supabaseError.details ? `Détails: ${supabaseError.details}` : '';
+      const errorCode = supabaseError.code ? `Code: ${supabaseError.code}` : '';
+      const errorHint = supabaseError.hint ? `Hint: ${supabaseError.hint}`: '';
+      
+      console.error(`Erreur d'ajout de transaction: ${errorMessage}`, errorCode, errorDetails, errorHint, e);
+      setErrorTransactions(`${errorMessage}${errorDetails ? ` (${errorDetails})` : ''}`);
       return null;
     }
   };
@@ -286,7 +312,7 @@ export const useTransactions = () => {
 
   const updateTransaction = async (id: string, updatedData: Partial<Omit<Transaction, 'id' | 'user_id'>>): Promise<boolean> => {
     if (!user) {
-      setError("Utilisateur non authentifié pour modifier une transaction.");
+      setErrorTransactions("Utilisateur non authentifié pour modifier une transaction.");
       return false;
     }
     
@@ -309,21 +335,18 @@ export const useTransactions = () => {
         .eq('user_id', user.id);
 
       if (updateError) throw updateError;
-      
-      // Optimistic update or re-fetch
-      // setTransactions(prev => prev.map(t => { ... }).sort((a,b) => ...));
-      fetchTransactions(); // Re-fetch to get the latest list
+      fetchTransactions();
       return true;
     } catch (e: any) {
-      console.error("Erreur de mise à jour de transaction:", e.message || e);
-      setError(e.message || "Erreur de mise à jour de transaction.");
+      console.error("Erreur de mise à jour de transaction:", e);
+      setErrorTransactions(e.message || "Erreur de mise à jour de transaction.");
       return false;
     }
   };
 
   const deleteTransaction = async (id: string): Promise<boolean> => {
     if (!user) {
-      setError("Utilisateur non authentifié pour supprimer une transaction.");
+      setErrorTransactions("Utilisateur non authentifié pour supprimer une transaction.");
       return false;
     }
     try {
@@ -334,27 +357,24 @@ export const useTransactions = () => {
         .eq('user_id', user.id);
 
       if (deleteError) throw deleteError;
-      // Optimistic update or re-fetch
-      // setTransactions(prev => prev.filter(t => t.id !== id));
-      fetchTransactions(); // Re-fetch to get the latest list
+      fetchTransactions();
       return true;
     } catch (e: any) {
-      console.error("Erreur de suppression de transaction:", e.message || e);
-      setError(e.message || "Erreur de suppression de transaction.");
+      console.error("Erreur de suppression de transaction:", e);
+      setErrorTransactions(e.message || "Erreur de suppression de transaction.");
       return false;
     }
   };
   
   return { 
     transactions, 
-    getTransactions: () => transactions, 
-    isLoading, 
-    error, 
+    isLoadingTransactions, 
+    errorTransactions, 
     addTransaction, 
     getTransactionById, 
     updateTransaction, 
     deleteTransaction,
-    fetchTransactions // Expose fetchTransactions for manual refresh or filtering
+    fetchTransactions
   };
 };
 
@@ -367,47 +387,83 @@ export interface MonthlyTrendData {
 }
 
 export const useDashboardData = () => {
-  const { transactions, isLoading: isLoadingTransactionsHook, error: errorTransactionsHook, fetchTransactions: fetchTransactionsFromHook } = useTransactions();
-  const { getCategoryById, isLoading: isLoadingCategories, error: errorCategories, fetchCategories } = useCategories();
+  const { 
+    transactions, 
+    isLoadingTransactions: isLoadingTransactionsHook, 
+    errorTransactions: errorTransactionsHook, 
+    fetchTransactions: fetchTransactionsFromHook 
+  } = useTransactions();
+  const { 
+    categories,
+    getCategoryById, 
+    isLoadingCategories: isLoadingCategoriesHook, 
+    errorCategories: errorCategoriesHook, 
+    fetchCategories: fetchCategoriesFromHook
+  } = useCategories();
   const { user } = useAuth();
 
-  // Renommer pour éviter la confusion avec les variables locales
   const [dashboardIsLoading, setDashboardIsLoading] = useState(true);
   const [dashboardError, setDashboardError] = useState<string | null>(null);
 
   useEffect(() => {
     const loadData = async () => {
       if (user) {
-        setDashboardIsLoading(true);
-        setDashboardError(null);
-        try {
-          // Ces fonctions sont déjà appelées dans leurs hooks respectifs au changement de user
-          // Mais nous voulons nous assurer qu'elles sont à jour pour le dashboard
-          await fetchTransactionsFromHook(); // Assurez-vous que cela retourne une promesse ou gérez l'état de chargement
-          await fetchCategories(); // Idem
-        } catch (err: any) {
-          setDashboardError(err.message || "Erreur de chargement des données du tableau de bord");
-        } finally {
-          setDashboardIsLoading(isLoadingTransactionsHook || isLoadingCategories);
-        }
+        // Initial call handled by individual hooks based on user state
+        // This effect will mainly react to loading state changes from those hooks
       } else {
-        setDashboardIsLoading(false);
+        setDashboardIsLoading(false); // Not logged in, nothing to load for dashboard
       }
     };
     loadData();
-  }, [user, fetchTransactionsFromHook, fetchCategories, isLoadingCategories, isLoadingTransactionsHook]);
-  
+  }, [user]);
+
+ useEffect(() => {
+    // Update dashboard loading state based on the loading states of its data sources
+    if (user) {
+      setDashboardIsLoading(isLoadingTransactionsHook || isLoadingCategoriesHook);
+      if (errorTransactionsHook) {
+        setDashboardError(errorTransactionsHook);
+      } else if (errorCategoriesHook) {
+        setDashboardError(errorCategoriesHook);
+      } else {
+        setDashboardError(null);
+      }
+    } else {
+      setDashboardIsLoading(false);
+      setDashboardError(null);
+    }
+  }, [user, isLoadingTransactionsHook, isLoadingCategoriesHook, errorTransactionsHook, errorCategoriesHook]);
+
+
   const { totalIncome, totalExpenses, currentBalance } = useMemo(() => {
     let income = 0;
     let expenses = 0;
+    const currentMonth = new Date().getMonth();
+    const currentYear = new Date().getFullYear();
+
     transactions.forEach(t => {
-      if (t.type === 'income') {
-        income += t.amount;
-      } else {
-        expenses += t.amount;
+      const transactionMonth = t.date.getMonth();
+      const transactionYear = t.date.getFullYear();
+      if (transactionMonth === currentMonth && transactionYear === currentYear) {
+        if (t.type === 'income') {
+          income += t.amount;
+        } else {
+          expenses += t.amount;
+        }
       }
     });
-    return { totalIncome: income, totalExpenses: expenses, currentBalance: income - expenses };
+    // Calculate overall balance from ALL transactions, not just current month
+    let overallIncome = 0;
+    let overallExpenses = 0;
+    transactions.forEach(t => {
+      if (t.type === 'income') overallIncome += t.amount;
+      else overallExpenses += t.amount;
+    });
+    return { 
+      totalIncome: income, // This month's income
+      totalExpenses: expenses, // This month's expenses
+      currentBalance: overallIncome - overallExpenses // Overall balance
+    };
   }, [transactions]);
 
   const recentTransactions = useMemo(() => {
@@ -421,8 +477,10 @@ export const useDashboardData = () => {
   }, [transactions, getCategoryById]);
   
   const spendingSummary = useMemo(() => {
+    const currentMonth = new Date().getMonth();
+    const currentYear = new Date().getFullYear();
     return transactions
-      .filter(t => t.type === 'expense' && t.categoryId)
+      .filter(t => t.type === 'expense' && t.categoryId && t.date.getMonth() === currentMonth && t.date.getFullYear() === currentYear)
       .reduce((acc, t) => {
         const categoryName = getCategoryById(t.categoryId!)?.name || 'Non classé';
         acc[categoryName] = (acc[categoryName] || 0) + t.amount;
@@ -433,7 +491,6 @@ export const useDashboardData = () => {
   const monthlyTrendData = useMemo(() => {
     if (!transactions || transactions.length === 0) return [];
     const trend: MonthlyTrendData[] = [];
-    // Afficher les 6 derniers mois incluant le mois actuel
     const firstMonth = startOfMonth(subMonths(new Date(), 5));
 
     for (let i = 0; i < 6; i++) {
@@ -466,6 +523,6 @@ export const useDashboardData = () => {
     spendingSummary, 
     monthlyTrendData,
     isLoading: dashboardIsLoading, 
-    error: dashboardError || errorTransactionsHook || errorCategories 
+    error: dashboardError
   };
 };
