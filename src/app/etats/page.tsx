@@ -16,7 +16,7 @@ import { fr } from 'date-fns/locale';
 import { Download, Printer, FileText, FileSpreadsheet, ChevronDown, Loader2 } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { useSettings } from "@/hooks/use-settings";
-import { useBudgets } from "@/hooks/use-budgets.ts"; // Nouveau hook
+import { useBudgets } from "@/hooks/use-budgets.ts";
 import { useToast } from "@/hooks/use-toast";
 
 
@@ -48,7 +48,6 @@ export default function EtatsPage() {
     to: endOfMonth(new Date()),
   });
 
-  // États locaux pour les montants prévus, synchronisés avec les données du hook useBudgets
   const [prevusRecettes, setPrevusRecettes] = useState<Record<string, number>>({});
   const [prevusDepenses, setPrevusDepenses] = useState<Record<string, number>>({});
 
@@ -56,16 +55,15 @@ export default function EtatsPage() {
     fetchTransactions();
     fetchCategories();
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // Fetch initial transactions and categories
+  }, []); 
 
   useEffect(() => {
-    if (dateRange?.from) {
+    if (dateRange?.from && dateRange?.to) { // Assurez-vous que la plage de dates est complète
       fetchBudgetsForPeriod(dateRange.from);
     }
   }, [dateRange, fetchBudgetsForPeriod]);
 
   useEffect(() => {
-    // Mettre à jour prevusRecettes et prevusDepenses lorsque les budgets sont chargés/modifiés
     const newPrevusRecettes: Record<string, number> = {};
     const newPrevusDepenses: Record<string, number> = {};
     budgets.forEach(budget => {
@@ -106,29 +104,31 @@ export default function EtatsPage() {
     });
   }, [transactions, dateRange]);
 
-  const handlePrevuChange = async (categoryId: string, value: string, type: 'income' | 'expense') => {
-    const amount = parseFloat(value) || 0;
-    
+  const handlePrevuChange = (categoryId: string, value: string, type: 'income' | 'expense') => {
+    const amount = parseFloat(value) || 0; // Mettre à jour l'état local immédiatement
     if (type === 'income') {
       setPrevusRecettes(prev => ({ ...prev, [categoryId]: amount }));
     } else {
       setPrevusDepenses(prev => ({ ...prev, [categoryId]: amount }));
     }
+  };
+
+  const handleSaveBudget = async (categoryId: string, type: 'income' | 'expense') => {
+    const amount = type === 'income' ? prevusRecettes[categoryId] : prevusDepenses[categoryId];
+    const numericAmount = Number(amount) || 0; // S'assurer que c'est un nombre
 
     if (dateRange?.from) {
-      const result = await upsertBudget(categoryId, dateRange.from, amount, type);
+      const result = await upsertBudget(categoryId, dateRange.from, numericAmount, type);
       if (!result) {
         toast({ title: "Erreur", description: `Impossible d'enregistrer le budget pour la catégorie. ${budgetError || ''}`, variant: "destructive"});
-        // Revenir à l'ancienne valeur si l'enregistrement échoue ?
-        // Pour cela, il faudrait stocker l'ancienne valeur avant la mise à jour de l'état local.
-      } else {
-        // Optionnel: toast de succès
-        // toast({ title: "Budget Enregistré", description: "Le montant prévu a été sauvegardé."});
       }
+      // Optionnel: toast de succès, mais peut être bruyant pour les onBlur
+      // else { toast({ title: "Budget Enregistré", description: "Le montant prévu a été sauvegardé."}); }
     } else {
       toast({ title: "Erreur", description: "Veuillez sélectionner une période valide pour enregistrer le budget.", variant: "destructive"});
     }
   };
+
 
   const processData = (categories: Category[], type: 'income' | 'expense'): EtatRow[] => {
     return categories
@@ -469,9 +469,10 @@ export default function EtatsPage() {
                     type="number"
                     value={(type === 'income' ? prevusRecettes[row.id] : prevusDepenses[row.id]) || ''}
                     onChange={(e) => handlePrevuChange(row.id, e.target.value, type)}
+                    onBlur={() => handleSaveBudget(row.id, type)}
                     className="w-32 text-right print:border-none print:bg-transparent print:p-0"
                     placeholder="0"
-                    disabled={isLoadingBudgets} // Désactiver pendant le chargement/sauvegarde des budgets
+                    disabled={isLoadingBudgets} 
                   />
                 </TableCell>
                 <TableCell className="text-right print:text-black">{formatCurrencyCFA(row.montantRealise)}</TableCell>
@@ -513,7 +514,7 @@ export default function EtatsPage() {
     );
   }
 
-  if (globalError && !isLoadingPage) { // Afficher seulement si pas en chargement pour éviter flash
+  if (globalError && !isLoadingPage) { 
     return (
       <div className="text-center text-destructive py-10">
         <p>Erreur de chargement des données: {globalError}</p>
@@ -534,22 +535,22 @@ export default function EtatsPage() {
         <div className="flex gap-2 w-full sm:w-auto">
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button className="w-full sm:w-auto" disabled={isLoadingSettings}>
-                {isLoadingSettings ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Download className="mr-2 h-4 w-4" />} 
+              <Button className="w-full sm:w-auto" disabled={isLoadingSettings || isLoadingBudgets}>
+                {(isLoadingSettings || isLoadingBudgets) ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Download className="mr-2 h-4 w-4" />} 
                 Exporter <ChevronDown className="ml-2 h-4 w-4" />
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
-              <DropdownMenuItem onClick={exportToPDF} disabled={isLoadingSettings}>
+              <DropdownMenuItem onClick={exportToPDF} disabled={isLoadingSettings || isLoadingBudgets}>
                 <FileText className="mr-2 h-4 w-4" /> Exporter en PDF (A4)
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={exportToXLSX} disabled={isLoadingSettings}>
+              <DropdownMenuItem onClick={exportToXLSX} disabled={isLoadingSettings || isLoadingBudgets}>
                 <FileSpreadsheet className="mr-2 h-4 w-4" /> Exporter en XLSX
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
-          <Button onClick={handlePrint} variant="outline" className="w-full sm:w-auto" disabled={isLoadingSettings}>
-            {isLoadingSettings ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Printer className="mr-2 h-4 w-4" />}
+          <Button onClick={handlePrint} variant="outline" className="w-full sm:w-auto" disabled={isLoadingSettings || isLoadingBudgets}>
+            {(isLoadingSettings || isLoadingBudgets) ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Printer className="mr-2 h-4 w-4" />}
              Imprimer
           </Button>
         </div>
@@ -584,7 +585,7 @@ export default function EtatsPage() {
         </CardContent>
       </Card>
       
-      {isLoadingCategories || isLoadingBudgets ? ( // Afficher le loader si les catégories OU les budgets chargent
+      {isLoadingCategories || isLoadingBudgets ? ( 
         <div className="flex justify-center items-center h-24"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>
       ) : (
         <>
@@ -622,3 +623,4 @@ export default function EtatsPage() {
     </div>
   );
 }
+
