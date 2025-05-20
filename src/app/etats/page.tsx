@@ -441,19 +441,13 @@ export default function EtatsPage() {
         <Table>
           <TableHeader>
             <TableRow className="print:border-b print:border-gray-400">
-              <TableHead className="w-12 print:text-black">N°</TableHead>
-              <TableHead className="print:text-black">{type === 'income' ? 'Types de recettes' : 'Types de dépenses'}</TableHead>
-              <TableHead className="text-right print:text-black">Montant Prévu</TableHead>
-              <TableHead className="text-right print:text-black">Montant Réalisé</TableHead>
-              <TableHead className="text-right print:text-black">Progression</TableHead> {/* Changed Header */}
-              <TableHead className="text-right print:text-black">% Réal.</TableHead>
-              <TableHead className="text-right print:text-black">Ecart</TableHead>
+              <TableHead className="w-12 print:text-black">N°</TableHead><TableHead className="print:text-black">{type === 'income' ? 'Types de recettes' : 'Types de dépenses'}</TableHead><TableHead className="text-right print:text-black">Montant Prévu</TableHead><TableHead className="text-right print:text-black">Montant Réalisé</TableHead><TableHead className="text-right print:text-black">Progression</TableHead><TableHead className="text-right print:text-black">% Réal.</TableHead><TableHead className="text-right print:text-black">Ecart</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {data.length === 0 && (
               <TableRow>
-                <TableCell colSpan={7} className="text-center text-muted-foreground h-20 print:text-black"> {/* Increased colSpan */}
+                <TableCell colSpan={7} className="text-center text-muted-foreground h-20 print:text-black">
                   Aucune catégorie de {type === 'income' ? 'recette' : 'dépense'}.
                 </TableCell>
               </TableRow>
@@ -474,10 +468,10 @@ export default function EtatsPage() {
                   />
                 </TableCell>
                 <TableCell className="text-right print:text-black">{formatCurrencyCFA(row.montantRealise)}</TableCell>
-                <TableCell className="text-right print:text-black w-32"> {/* Added Cell for Progress */}
+                <TableCell className="text-right print:text-black w-32">
                   <Progress 
                     value={row.montantPrevu > 0 ? Math.min((row.montantRealise / row.montantPrevu) * 100, 100) : (row.montantRealise > 0 ? 100 : 0)} 
-                    className="h-2 print:hidden" // Hide on print or style appropriately
+                    className="h-2 print:hidden"
                     aria-label={`Progression ${row.type}`}
                   />
                    <span className="print:block hidden text-xs">
@@ -494,7 +488,7 @@ export default function EtatsPage() {
               <TableCell colSpan={2} className="print:text-black">{type === 'income' ? 'Total Recettes' : 'Total Dépenses'}</TableCell>
               <TableCell className="text-right print:text-black">{formatCurrencyCFA(totalPrevus)}</TableCell>
               <TableCell className="text-right print:text-black">{formatCurrencyCFA(totalRealises)}</TableCell>
-              <TableCell colSpan={3}></TableCell> {/* Adjusted colSpan */}
+              <TableCell colSpan={3}></TableCell>
             </TableRow>
           </TableBody>
         </Table>
@@ -631,3 +625,4 @@ export default function EtatsPage() {
     </div>
   );
 }
+
