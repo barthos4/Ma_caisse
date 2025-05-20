@@ -16,7 +16,7 @@ import { Separator } from '@/components/ui/separator';
 import { Home, ArrowLeftRight, LayoutGrid, BarChart3, BookText, Settings, LogOut, Briefcase, ClipboardList } from 'lucide-react';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { ThemeSwitcher } from '@/components/theme-switcher';
-import { useAuth } from '@/hooks/use-auth.tsx'; // Updated import path
+import { useAuth } from '@/hooks/use-auth.tsx'; 
 
 const navItems = [
   { href: '/', label: 'Tableau de Bord', icon: Home },
@@ -30,7 +30,7 @@ const navItems = [
 export function AppSidebar() {
   const pathname = usePathname();
   const isMobile = useIsMobile();
-  const { logout } = useAuth(); // Get logout function
+  const { logout } = useAuth(); 
 
   return (
     <Sidebar collapsible={isMobile ? "offcanvas" : "icon"} className="print:hidden">
@@ -78,13 +78,17 @@ export function AppSidebar() {
             <SidebarMenuButton 
               tooltip="Déconnexion" 
               className="group-data-[collapsible=icon]:justify-center"
-              onClick={logout} // Call logout function on click
+              onClick={logout} 
             >
               <LogOut className="h-5 w-5 shrink-0" />
               <span className="group-data-[collapsible=icon]:hidden">Déconnexion</span>
             </SidebarMenuButton>
           </SidebarMenuItem>
         </SidebarMenu>
+        <div className="mt-4 text-center text-xs text-muted-foreground group-data-[collapsible=icon]:hidden">
+          <p>Copyright © 2025 SABOLNA Barthélemy.</p>
+          <p>Tous droits réservés.</p>
+        </div>
         {isMobile && <div className="pt-2"><SidebarTrigger/></div>}
       </SidebarFooter>
     </Sidebar>
