@@ -4,7 +4,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import type { AppSettings } from '@/types';
 import { supabase } from '@/lib/supabaseClient';
-import { useAuth } from './use-auth'; // Pour obtenir user.id
+import { useAuth } from './use-auth.tsx'; // Updated import path // Pour obtenir user.id
 import type { TablesInsert, TablesUpdate } from '@/types/supabase';
 
 const defaultSettings: AppSettings = {

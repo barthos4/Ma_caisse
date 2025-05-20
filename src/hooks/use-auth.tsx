@@ -4,14 +4,17 @@
 import { useState, useEffect, useCallback, createContext, useContext, type ReactNode } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import { supabase } from '@/lib/supabaseClient';
-import type { AuthChangeEvent, Session, User, AuthError } from '@supabase/supabase-js';
+import type { AuthChangeEvent, Session, User, AuthError as SupabaseAuthError } from '@supabase/supabase-js';
+
+// Explicitly type AuthError to match what Supabase returns, which extends Error
+type AuthError = SupabaseAuthError | Error | null;
 
 interface AuthContextType {
   user: User | null;
   session: Session | null;
   isLoading: boolean;
-  login: (email: string, password?: string) => Promise<{ error: Error | null }>;
-  signup: (email: string, password?: string) => Promise<{ error: Error | null }>;
+  login: (email: string, password?: string) => Promise<{ error: AuthError }>;
+  signup: (email: string, password?: string) => Promise<{ error: AuthError }>;
   logout: () => Promise<void>;
 }
 
@@ -58,17 +61,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
   }, [router, pathname]);
 
-  const loginCallback = useCallback(async (email: string, password?: string): Promise<{ error: Error | null }> => {
+  const loginCallback = useCallback(async (email: string, password?: string): Promise<{ error: AuthError }> => {
     setIsLoading(true);
-    // Supabase AuthError extends Error, so direct assignment is fine.
     const { error } = await supabase.auth.signInWithPassword({ email, password: password! });
     setIsLoading(false);
     return { error };
   }, []);
 
-  const signupCallback = useCallback(async (email: string, password?: string): Promise<{ error: Error | null }> => {
+  const signupCallback = useCallback(async (email: string, password?: string): Promise<{ error: AuthError }> => {
     setIsLoading(true);
-    // Supabase AuthError extends Error, so direct assignment is fine.
     const { error } = await supabase.auth.signUp({ email, password: password! });
     setIsLoading(false);
     return { error };
@@ -79,9 +80,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await supabase.auth.signOut();
     // setUser(null); // Handled by onAuthStateChange
     // setSession(null); // Handled by onAuthStateChange
-    setIsLoading(false);
+    // No need to manually set isLoading to false here if onAuthStateChange handles it
+    // However, if onAuthStateChange might not fire immediately or if an error occurs in signOut
+    // it might be safer to ensure isLoading is set to false.
+    // For now, relying on onAuthStateChange.
   }, []);
-
+  
   const contextValue: AuthContextType = {
     user,
     session,

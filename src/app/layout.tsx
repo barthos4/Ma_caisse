@@ -1,10 +1,11 @@
+
 import type { Metadata } from 'next';
 import { Inter } from 'next/font/google'; 
 import './globals.css';
 import { MainLayout } from '@/components/layout/main-layout';
 import { Toaster } from "@/components/ui/toaster";
 import { ThemeProvider } from "@/components/theme-provider";
-import { AuthProvider } from '@/hooks/use-auth'; // Import AuthProvider
+import { AuthProvider } from '@/hooks/use-auth.tsx'; // Updated import path
 
 const inter = Inter({
   subsets: ['latin'],

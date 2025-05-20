@@ -4,7 +4,7 @@
 import type { Transaction, Category } from '@/types';
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from './supabaseClient';
-import { useAuth } from '@/hooks/use-auth';
+import { useAuth } from '@/hooks/use-auth.tsx'; // Updated import path
 import type { Tables, TablesInsert, TablesUpdate } from '@/types/supabase';
 import { parseISO } from 'date-fns'; // Pour convertir les strings de date de Supabase en objets Date
 
@@ -191,7 +191,7 @@ export const useTransactions = () => {
       user_id: user.id,
       date: transactionData.date.toISOString().split('T')[0], // Format YYYY-MM-DD
       category_id: transactionData.categoryId || null,
-      order_number: transactionData.orderNumber || null,
+      order_number: transactionData.orderNumber || null, // N° d'ordre est optionnel
       reference: transactionData.reference || null,
     };
     // @ts-ignore
@@ -234,7 +234,7 @@ export const useTransactions = () => {
         updated_at: new Date().toISOString(),
         ...(updatedData.date && { date: updatedData.date.toISOString().split('T')[0] }),
         ...(updatedData.categoryId && { category_id: updatedData.categoryId }),
-        order_number: updatedData.orderNumber || null,
+        order_number: updatedData.orderNumber || null, // N° d'ordre est optionnel
         reference: updatedData.reference || null,
     };
     // @ts-ignore

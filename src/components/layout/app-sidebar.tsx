@@ -16,7 +16,7 @@ import { Separator } from '@/components/ui/separator';
 import { Home, ArrowLeftRight, LayoutGrid, BarChart3, BookText, Settings, LogOut, Briefcase, ClipboardList } from 'lucide-react';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { ThemeSwitcher } from '@/components/theme-switcher';
-import { useAuth } from '@/hooks/use-auth'; // Import useAuth
+import { useAuth } from '@/hooks/use-auth.tsx'; // Updated import path
 
 const navItems = [
   { href: '/', label: 'Tableau de Bord', icon: Home },
