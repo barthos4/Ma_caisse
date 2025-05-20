@@ -9,7 +9,8 @@ import type { Transaction, Category } from "@/types";
 import { DateRange } from "react-day-picker";
 import { format, startOfMonth, endOfMonth, subMonths, startOfWeek, endOfWeek, subWeeks, startOfDay, endOfDay, subDays, isSameDay } from "date-fns";
 import { fr } from 'date-fns/locale';
-import { Bar, XAxis, YAxis, CartesianGrid, Pie, Cell } from 'recharts'; // Removed BarChart, PieChart, Tooltip, Legend, ResponsiveContainer
+import { Bar, XAxis, YAxis, CartesianGrid, Pie, Cell, PieChart as RechartsPieChart, BarChart as RechartsBarChart } from 'recharts'; // Keep original recharts imports for now
+import * as RechartsPrimitive from "recharts"; // Added import
 import { formatCurrencyCFA } from "@/lib/utils";
 import {
   ChartContainer,
@@ -545,4 +546,6 @@ export default function ReportsPage() {
     </div>
   );
 }
+    
+
     
