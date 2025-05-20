@@ -13,9 +13,9 @@ import { formatCurrencyCFA } from "@/lib/utils";
 import { DateRange } from "react-day-picker";
 import { format, startOfMonth, endOfMonth, subMonths, startOfWeek, endOfWeek, subWeeks, startOfDay, endOfDay, subDays, isSameDay } from "date-fns";
 import { fr } from 'date-fns/locale';
-import { Download, Printer, FileText, FileSpreadsheet, ChevronDown } from "lucide-react";
+import { Download, Printer, FileText, FileSpreadsheet, ChevronDown, Loader2 } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { useSettings } from "@/hooks/use-settings"; // Import useSettings
+import { useSettings } from "@/hooks/use-settings";
 
 import jsPDF from 'jspdf';
 import 'jspdf-autotable';
@@ -31,12 +31,15 @@ interface EtatRow {
   ecart: number;
 }
 
+const PREVUS_RECETTES_STORAGE_KEY = 'GESTION_CAISSE_PREVUS_RECETTES';
+const PREVUS_DEPENSES_STORAGE_KEY = 'GESTION_CAISSE_PREVUS_DEPENSES';
+
 export default function EtatsPage() {
-  const { getTransactions } = useTransactions();
-  const { getCategories } = useCategories();
-  const { settings, isLoading: isLoadingSettings } = useSettings(); // Use settings hook
-  const allTransactions = getTransactions();
-  const allCategories = getCategories();
+  const { transactions, isLoading: isLoadingTransactions, error: errorTransactions, fetchTransactions } = useTransactions();
+  const { categories: allCategories, isLoading: isLoadingCategories, error: errorCategories, fetchCategories } = useCategories();
+  const { settings, isLoading: isLoadingSettings } = useSettings();
+  
+  const [currentPrintDate, setCurrentPrintDate] = useState("");
 
   const [dateRange, setDateRange] = useState<DateRange | undefined>({
     from: startOfMonth(new Date()),
@@ -45,11 +48,52 @@ export default function EtatsPage() {
 
   const [prevusRecettes, setPrevusRecettes] = useState<Record<string, number>>({});
   const [prevusDepenses, setPrevusDepenses] = useState<Record<string, number>>({});
-  const [currentPrintDate, setCurrentPrintDate] = useState("");
+
+  useEffect(() => {
+    fetchTransactions();
+    fetchCategories();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
 
   useEffect(() => {
     setCurrentPrintDate(format(new Date(), 'dd/MM/yyyy', { locale: fr }));
+
+    // Charger les prévisions depuis localStorage
+    try {
+      const storedRecettes = localStorage.getItem(PREVUS_RECETTES_STORAGE_KEY);
+      if (storedRecettes) {
+        setPrevusRecettes(JSON.parse(storedRecettes));
+      }
+      const storedDepenses = localStorage.getItem(PREVUS_DEPENSES_STORAGE_KEY);
+      if (storedDepenses) {
+        setPrevusDepenses(JSON.parse(storedDepenses));
+      }
+    } catch (error) {
+      console.error("Erreur lors du chargement des prévisions depuis localStorage:", error);
+      // Initialiser avec des objets vides si le parsing échoue
+      setPrevusRecettes({});
+      setPrevusDepenses({});
+    }
   }, []);
+
+  useEffect(() => {
+    // Sauvegarder les prévisions dans localStorage à chaque changement
+    try {
+      localStorage.setItem(PREVUS_RECETTES_STORAGE_KEY, JSON.stringify(prevusRecettes));
+    } catch (error) {
+        console.error("Erreur lors de la sauvegarde des prévisions (recettes) dans localStorage:", error);
+    }
+  }, [prevusRecettes]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(PREVUS_DEPENSES_STORAGE_KEY, JSON.stringify(prevusDepenses));
+    } catch (error) {
+        console.error("Erreur lors de la sauvegarde des prévisions (dépenses) dans localStorage:", error);
+    }
+  }, [prevusDepenses]);
+
 
   const presetDateRanges = [
     { label: "Ce Mois-ci", range: { from: startOfMonth(new Date()), to: endOfMonth(new Date()) } },
@@ -59,12 +103,12 @@ export default function EtatsPage() {
   ];
 
   const filteredTransactions = useMemo(() => {
-    return allTransactions.filter((t) => {
+    return transactions.filter((t) => {
       const transactionDate = t.date;
       return dateRange?.from && dateRange?.to ? 
         transactionDate >= startOfDay(dateRange.from) && transactionDate <= endOfDay(dateRange.to) : true;
     });
-  }, [allTransactions, dateRange]);
+  }, [transactions, dateRange]);
 
   const handlePrevuChange = (categoryId: string, value: string, type: 'income' | 'expense') => {
     const amount = parseFloat(value) || 0;
@@ -84,7 +128,7 @@ export default function EtatsPage() {
           .reduce((sum, t) => sum + t.amount, 0);
         
         const montantPrevu = type === 'income' ? (prevusRecettes[category.id] || 0) : (prevusDepenses[category.id] || 0);
-        const pourcentageRealisation = montantPrevu > 0 ? (montantRealise / montantPrevu) * 100 : 0;
+        const pourcentageRealisation = montantPrevu > 0 ? (montantRealise / montantPrevu) * 100 : (montantRealise > 0 ? 100 : 0); // Si prévu est 0 mais réalisé > 0, on peut considérer 100% (ou adapter)
         const ecart = montantRealise - montantPrevu;
 
         return {
@@ -412,7 +456,7 @@ export default function EtatsPage() {
                 <TableCell className="text-right print:text-black">
                   <Input
                     type="number"
-                    value={row.montantPrevu === 0 ? '' : row.montantPrevu}
+                    value={type === 'income' ? (prevusRecettes[row.id] || '') : (prevusDepenses[row.id] || '')}
                     onChange={(e) => handlePrevuChange(row.id, e.target.value, type)}
                     className="w-32 text-right print:border-none print:bg-transparent print:p-0"
                     placeholder="0"
@@ -446,6 +490,26 @@ export default function EtatsPage() {
       </div>
   );
 
+  const isLoading = isLoadingCategories || isLoadingTransactions || isLoadingSettings;
+  const globalError = errorCategories || errorTransactions; // Pas d'erreur spécifique pour settings dans l'UI ici
+
+  if (isLoading && !filteredTransactions.length && !allCategories.length) { // Afficher un loader global si rien n'est encore chargé
+    return (
+      <div className="flex justify-center items-center h-64">
+        <Loader2 className="h-12 w-12 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  if (globalError) {
+    return (
+      <div className="text-center text-destructive py-10">
+        <p>Erreur de chargement des données: {globalError}</p>
+        <p>Veuillez actualiser la page ou vérifier votre connexion.</p>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6 print:space-y-2">
       {printHeader}
@@ -459,7 +523,8 @@ export default function EtatsPage() {
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button className="w-full sm:w-auto" disabled={isLoadingSettings}>
-                <Download className="mr-2 h-4 w-4" /> Exporter <ChevronDown className="ml-2 h-4 w-4" />
+                {isLoadingSettings ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Download className="mr-2 h-4 w-4" />} 
+                Exporter <ChevronDown className="ml-2 h-4 w-4" />
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
@@ -472,7 +537,8 @@ export default function EtatsPage() {
             </DropdownMenuContent>
           </DropdownMenu>
           <Button onClick={handlePrint} variant="outline" className="w-full sm:w-auto" disabled={isLoadingSettings}>
-            <Printer className="mr-2 h-4 w-4" /> Imprimer
+            {isLoadingSettings ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Printer className="mr-2 h-4 w-4" />}
+             Imprimer
           </Button>
         </div>
       </div>
@@ -506,8 +572,15 @@ export default function EtatsPage() {
         </CardContent>
       </Card>
       
-      {renderTableSection("I- Les Recettes", recettesData, 'income', totalRecettesPrevus, totalRecettesRealisees)}
-      {renderTableSection("II- Les Dépenses", depensesData, 'expense', totalDepensesPrevus, totalDepensesRealisees)}
+      {isLoadingCategories ? (
+        <div className="flex justify-center items-center h-24"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>
+      ) : (
+        <>
+          {renderTableSection("I- Les Recettes", recettesData, 'income', totalRecettesPrevus, totalRecettesRealisees)}
+          {renderTableSection("II- Les Dépenses", depensesData, 'expense', totalDepensesPrevus, totalDepensesRealisees)}
+        </>
+      )}
+
 
       <Card className="mt-6 print:shadow-none print:border-2 print:border-black print:mt-4">
         <CardHeader className="print:py-2">
@@ -537,3 +610,4 @@ export default function EtatsPage() {
     </div>
   );
 }
+
