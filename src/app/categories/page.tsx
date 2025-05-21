@@ -9,21 +9,21 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Badge } from "@/components/ui/badge";
 import { PlusCircle, Edit2, Trash2, Loader2 } from "lucide-react";
 import type { Category } from "@/types";
-import { useCategories } from "@/lib/mock-data"; // Updated path if you moved hooks
+import { useCategories } from "@/lib/mock-data";
 import { useToast } from "@/hooks/use-toast";
 
 export default function CategoriesPage() {
-  const { categories, isLoading, error, deleteCategory, fetchCategories } = useCategories();
+  const { categories, isLoadingCategories, errorCategories, deleteCategory, fetchCategories } = useCategories();
   const { toast } = useToast();
 
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingCategory, setEditingCategory] = useState<Category | null>(null);
 
   useEffect(() => {
-    if (error) {
-      toast({ title: "Erreur", description: error, variant: "destructive" });
+    if (errorCategories) {
+      toast({ title: "Erreur Catégories", description: errorCategories, variant: "destructive" });
     }
-  }, [error, toast]);
+  }, [errorCategories, toast]);
 
   const handleAddCategory = () => {
     setEditingCategory(null);
@@ -36,14 +36,13 @@ export default function CategoriesPage() {
   };
 
   const handleDeleteCategory = async (id: string) => {
-    if (confirm("Êtes-vous sûr de vouloir supprimer cette catégorie ? Cette action est irréversible.")) {
+    if (confirm("Êtes-vous sûr de vouloir supprimer cette catégorie ? Cette action est irréversible si la catégorie n'est pas utilisée dans des transactions.")) {
       const success = await deleteCategory(id);
       if (success) {
         toast({ title: "Succès", description: "Catégorie supprimée." });
+        fetchCategories(); // Re-fetch to update list
       } else {
-        // L'alerte d'erreur est gérée par le hook ou ici si une erreur spécifique est retournée.
-        // Si deleteCategory gère déjà les toasts d'erreur, cette partie peut être simplifiée.
-         toast({ title: "Erreur", description: "Impossible de supprimer la catégorie. Vérifiez qu'elle n'est pas utilisée.", variant: "destructive" });
+         toast({ title: "Erreur", description: errorCategories || "Impossible de supprimer la catégorie. Vérifiez qu'elle n'est pas utilisée.", variant: "destructive" });
       }
     }
   };
@@ -54,7 +53,8 @@ export default function CategoriesPage() {
 
   const handleFormSubmit = () => {
     setIsFormOpen(false);
-    fetchCategories(); // Re-fetch categories after add/edit
+    setEditingCategory(null);
+    fetchCategories(); 
   };
 
   return (
@@ -88,15 +88,15 @@ export default function CategoriesPage() {
           <CardDescription>Toutes vos catégories définies.</CardDescription>
         </CardHeader>
         <CardContent>
-          {isLoading && (
+          {isLoadingCategories && (
             <div className="flex justify-center items-center h-24">
               <Loader2 className="h-8 w-8 animate-spin text-primary" />
             </div>
           )}
-          {!isLoading && error && (
-             <p className="text-center text-destructive">Erreur de chargement des catégories: {error}</p>
+          {!isLoadingCategories && errorCategories && (
+             <p className="text-center text-destructive">Erreur de chargement des catégories: {errorCategories}</p>
           )}
-          {!isLoading && !error && (
+          {!isLoadingCategories && !errorCategories && (
             <Table>
               <TableHeader>
                 <TableRow>

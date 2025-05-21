@@ -1,6 +1,6 @@
 export interface Transaction {
   id: string;
-  orderNumber: string; // N° d'ordre - rendu non optionnel après auto-génération
+  orderNumber: string; // N° d'ordre
   date: Date;
   description: string;
   reference?: string; // Référence de la transaction
@@ -22,8 +22,11 @@ export interface DatedAmount {
 }
 
 export interface AppSettings {
-  companyName?: string;
-  companyAddress?: string;
+  companyName?: string | null;
+  companyAddress?: string | null;
+  companyLogoUrl?: string | null; // URL du logo de l'entreprise
+  rccm?: string | null; // Registre du Commerce et du Crédit Mobilier
+  niu?: string | null; // Numéro d'Identification Unique
   // Future settings can be added here
   // dateFormat?: string; 
   // notificationPreferences?: { email?: boolean; inApp?: boolean };

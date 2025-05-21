@@ -16,10 +16,11 @@ import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { Badge } from "@/components/ui/badge";
 import { formatCurrencyCFA } from "@/lib/utils";
-import { ChevronDown, Download, Edit2, Printer, Trash2, FileText, FileSpreadsheet } from "lucide-react";
+import { ChevronDown, Download, Edit2, Printer, Trash2, FileText, FileSpreadsheet, Loader2 } from "lucide-react";
 import type { Transaction } from "@/types";
 import { TransactionForm } from "@/app/transactions/transaction-form"; 
-import { useSettings } from "@/hooks/use-settings"; // Import useSettings
+import { useSettings } from "@/hooks/use-settings"; 
+import { useToast } from "@/hooks/use-toast";
 
 import jsPDF from 'jspdf';
 import 'jspdf-autotable';
@@ -31,23 +32,41 @@ interface JournalEntry extends Transaction {
 }
 
 export default function JournalPage() {
-  const { getTransactions, deleteTransaction } = useTransactions();
-  const { getCategoryById } = useCategories();
-  const { settings, isLoading: isLoadingSettings } = useSettings(); // Use settings hook
+  const { 
+    transactions: allTransactions, 
+    isLoadingTransactions, 
+    errorTransactions, 
+    deleteTransaction, 
+    fetchTransactions 
+  } = useTransactions();
+  const { 
+    categories: allCategories, 
+    getCategoryById, 
+    isLoadingCategories,
+    fetchCategories: fetchCategoriesHook
+  } = useCategories();
+  const { settings, isLoading: isLoadingSettings, fetchSettings: fetchSettingsHook } = useSettings();
+  const { toast } = useToast();
   
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
   const [currentDate, setCurrentDate] = useState("");
 
   useEffect(() => {
+    fetchTransactions();
+    fetchCategoriesHook();
+    fetchSettingsHook();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+
+  useEffect(() => {
     setCurrentDate(format(new Date(), 'dd/MM/yyyy', { locale: fr }));
   }, []);
 
-  const transactions = getTransactions(); 
-
   const journalEntries = useMemo(() => {
     let runningBalance = 0;
-    return transactions
+    return allTransactions
       .slice() 
       .sort((a, b) => a.date.getTime() - b.date.getTime()) 
       .map(t => {
@@ -62,16 +81,22 @@ export default function JournalPage() {
           balance: runningBalance,
         };
       });
-  }, [transactions, getCategoryById]);
+  }, [allTransactions, getCategoryById]);
 
   const handleEditTransaction = (transaction: Transaction) => {
     setEditingTransaction(transaction);
     setIsFormOpen(true);
   };
   
-  const handleDeleteTransaction = (id: string) => {
+  const handleDeleteTransaction = async (id: string) => {
     if (confirm("Êtes-vous sûr de vouloir supprimer cette transaction du journal ?")) {
-      deleteTransaction(id);
+      const success = await deleteTransaction(id);
+      if (success) {
+        toast({ title: "Succès", description: "Transaction supprimée du journal." });
+        // fetchTransactions(); // Re-fetch est géré par le hook useTransactions
+      } else {
+        toast({ title: "Erreur", description: errorTransactions || "Impossible de supprimer la transaction.", variant: "destructive" });
+      }
     }
   };
 
@@ -115,8 +140,8 @@ export default function JournalPage() {
     }
   };
 
-  const exportToPDF = () => {
-    if (isLoadingSettings) return; // Wait for settings to load
+  const exportToPDF = async () => {
+    if (isLoadingSettings || !settings) return;
     const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' }); 
     const tableColumn = ["N° Ord.", "Date", "Description", "Réf.", "Catégorie", "Type", "Revenu", "Dépense", "Solde"];
     const tableRows: (string | number)[][] = [];
@@ -136,21 +161,58 @@ export default function JournalPage() {
       tableRows.push(entryData);
     });
 
+    let startY = 10;
+    if (settings.companyLogoUrl) {
+        try {
+            const response = await fetch(settings.companyLogoUrl);
+            const blob = await response.blob();
+            const reader = new FileReader();
+            await new Promise<void>((resolve, reject) => {
+                reader.onload = () => {
+                    doc.addImage(reader.result as string, 'PNG', 14, startY, 30, 15); // Adjust x, y, width, height as needed
+                    resolve();
+                };
+                reader.onerror = reject;
+                reader.readAsDataURL(blob);
+            });
+            startY += 20; // Adjust spacing after logo
+        } catch (error) {
+            console.error("Erreur de chargement du logo pour PDF:", error);
+            // Continuer sans logo si erreur
+        }
+    }
+
+
     doc.setFontSize(14);
-    doc.text(settings.companyName || "GESTION CAISSE", doc.internal.pageSize.getWidth() / 2, 10, { align: 'center' });
+    doc.text(settings.companyName || "GESTION CAISSE", doc.internal.pageSize.getWidth() / 2, startY, { align: 'center' });
+    startY += 5;
     if (settings.companyAddress) {
       doc.setFontSize(8);
-      doc.text(settings.companyAddress, doc.internal.pageSize.getWidth() / 2, 15, { align: 'center' });
+      doc.text(settings.companyAddress, doc.internal.pageSize.getWidth() / 2, startY, { align: 'center' });
+      startY += 5;
     }
+     if (settings.rccm) {
+      doc.setFontSize(8);
+      doc.text(`RCCM: ${settings.rccm}`, 14, startY);
+    }
+    if (settings.niu) {
+      doc.setFontSize(8);
+      doc.text(`NIU: ${settings.niu}`, doc.internal.pageSize.getWidth() - 14 - (doc.getTextWidth(`NIU: ${settings.niu}`)), startY);
+    }
+    startY += 5;
+
     doc.setFontSize(12);
-    doc.text("Journal de Caisse", doc.internal.pageSize.getWidth() / 2, 22, { align: 'center' });
+    doc.text("Journal de Caisse", doc.internal.pageSize.getWidth() / 2, startY, { align: 'center' });
+    startY += 5;
     doc.setFontSize(9);
-    doc.text(`Date d'export: ${currentDate}`, doc.internal.pageSize.getWidth() / 2, 27, { align: 'center' });
+    doc.text(`Date d'export: ${currentDate}`, doc.internal.pageSize.getWidth() / 2, startY, { align: 'center' });
+    startY += 7;
+
 
     (doc as any).autoTable({
       head: [tableColumn],
       body: tableRows,
-      startY: 32, 
+      startY: startY, 
       theme: 'grid',
       headStyles: { fillColor: [22, 160, 133], fontSize: 7, textColor: [255,255,255] }, 
       styles: { font: 'helvetica', fontSize: 7, cellPadding: 1, overflow: 'linebreak' }, 
@@ -166,17 +228,19 @@ export default function JournalPage() {
         8: { cellWidth: 25, halign: 'right' as const }, 
       }
     });
-    doc.save("journal_caisse_A4.pdf");
+    doc.save("journal_caisse_A4_paysage.pdf");
   };
 
   const exportToXLSX = () => {
-    if (isLoadingSettings) return;
+    if (isLoadingSettings || !settings) return;
     const headerXlsx = [
       { col1: settings.companyName || "GESTION CAISSE" },
       ...(settings.companyAddress ? [{ col1: settings.companyAddress }] : []),
+      ...(settings.rccm ? [{col1: `RCCM: ${settings.rccm}`}] : []),
+      ...(settings.niu ? [{col1: `NIU: ${settings.niu}`}] : []),
       { col1: "Journal de Caisse" },
       { col1: `Date d'export: ${currentDate}` },
-      {}, // Empty row for spacing
+      {}, 
     ];
     
     const worksheetData = journalEntries.map(entry => ({
@@ -200,24 +264,20 @@ export default function JournalPage() {
     worksheet['!cols'] = colWidths;
 
     if(!worksheet['!merges']) worksheet['!merges'] = [];
-    worksheet['!merges'].push({s: {r:0, c:0}, e: {r:0, c:8}}); 
-    if (settings.companyAddress) {
-      worksheet['!merges'].push({s: {r:1, c:0}, e: {r:1, c:8}}); 
-      worksheet['!merges'].push({s: {r:2, c:0}, e: {r:2, c:8}});
-      worksheet['!merges'].push({s: {r:3, c:0}, e: {r:3, c:8}});
-    } else {
-      worksheet['!merges'].push({s: {r:1, c:0}, e: {r:1, c:8}});
-      worksheet['!merges'].push({s: {r:2, c:0}, e: {r:2, c:8}});
-    }
+    const maxColIndex = colWidths.length - 1;
+    headerXlsx.forEach((_, rowIndex) => {
+        if (rowIndex < headerXlsx.length -1) { // Don't merge the empty spacer row
+             worksheet['!merges']?.push({s: {r:rowIndex, c:0}, e: {r:rowIndex, c:maxColIndex}});
+        }
+    });
     
-    // Apply currency format
     const currencyFormat = '#,##0 "F CFA"';
-    const firstDataRow = headerXlsx.length + 2; // +1 for headers of data, +1 to start from first data row
+    const firstDataRow = headerXlsx.length + 2; 
     for (let i = 0; i < worksheetData.length; i++) {
         const rowIndex = firstDataRow + i;
-        if (worksheet[`G${rowIndex}`]) worksheet[`G${rowIndex}`].z = currencyFormat; // Revenu
-        if (worksheet[`H${rowIndex}`]) worksheet[`H${rowIndex}`].z = currencyFormat; // Dépense
-        if (worksheet[`I${rowIndex}`]) worksheet[`I${rowIndex}`].z = currencyFormat; // Solde
+        if (worksheet[`G${rowIndex}`]) worksheet[`G${rowIndex}`].z = currencyFormat; 
+        if (worksheet[`H${rowIndex}`]) worksheet[`H${rowIndex}`].z = currencyFormat; 
+        if (worksheet[`I${rowIndex}`]) worksheet[`I${rowIndex}`].z = currencyFormat; 
     }
 
     const workbook = XLSX.utils.book_new();
@@ -231,13 +291,32 @@ export default function JournalPage() {
   };
 
   const printHeader = (
-    <div className="print:block hidden my-6 text-center">
+    <div className="print:block hidden my-4 text-center">
+      {settings.companyLogoUrl && <img src={settings.companyLogoUrl} alt="Logo Entreprise" className="h-16 mx-auto mb-2 object-contain" data-ai-hint="company logo"/>}
       <h1 className="text-xl font-bold text-primary print:text-black">{settings.companyName || "GESTION CAISSE"}</h1>
       {settings.companyAddress && <p className="text-sm print:text-black">{settings.companyAddress}</p>}
-      <h2 className="text-lg font-semibold mt-1 print:text-black">Journal de Caisse</h2>
+      <div className="flex justify-between text-xs mt-1 px-2">
+        <span>{settings.rccm ? `RCCM: ${settings.rccm}` : ''}</span>
+        <span>{settings.niu ? `NIU: ${settings.niu}` : ''}</span>
+      </div>
+      <h2 className="text-lg font-semibold mt-2 print:text-black">Journal de Caisse</h2>
       {currentDate && <p className="text-xs text-muted-foreground mt-1 print:text-black">Imprimé le: {currentDate}</p>}
     </div>
   );
+
+  const isLoadingPage = isLoadingTransactions || isLoadingCategories || isLoadingSettings;
+  const globalError = errorTransactions; // Assuming other errors are handled via toasts
+
+  if (isLoadingPage && !journalEntries.length) {
+    return (
+      <div className="flex justify-center items-center h-64">
+        <Loader2 className="h-12 w-12 animate-spin text-primary" />
+      </div>
+    );
+  }
+   if (!isLoadingPage && globalError) {
+    return <div className="text-center text-destructive py-10"><p>Erreur de chargement du journal: {globalError}</p></div>;
+  }
 
 
   return (
@@ -253,7 +332,8 @@ export default function JournalPage() {
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button className="w-full sm:w-auto" disabled={isLoadingSettings}>
-                <Download className="mr-2 h-4 w-4" /> Exporter <ChevronDown className="ml-2 h-4 w-4" />
+                {isLoadingSettings ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Download className="mr-2 h-4 w-4" />}
+                 Exporter <ChevronDown className="ml-2 h-4 w-4" />
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
@@ -263,7 +343,7 @@ export default function JournalPage() {
               </DropdownMenuItem>
               <DropdownMenuItem onClick={exportToPDF} disabled={isLoadingSettings}>
                 <FileText className="mr-2 h-4 w-4" />
-                Exporter en PDF (A4)
+                Exporter en PDF (A4 Paysage)
               </DropdownMenuItem>
               <DropdownMenuItem onClick={exportToXLSX} disabled={isLoadingSettings}>
                 <FileSpreadsheet className="mr-2 h-4 w-4" />
@@ -272,7 +352,8 @@ export default function JournalPage() {
             </DropdownMenuContent>
           </DropdownMenu>
           <Button onClick={handlePrint} variant="outline" className="w-full sm:w-auto" disabled={isLoadingSettings}>
-            <Printer className="mr-2 h-4 w-4" /> Imprimer
+           {isLoadingSettings ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Printer className="mr-2 h-4 w-4" />}
+            Imprimer
           </Button>
         </div>
       </div>
@@ -287,7 +368,9 @@ export default function JournalPage() {
             onFormSubmit={() => {
               setIsFormOpen(false);
               setEditingTransaction(null); 
-            }} 
+              fetchTransactions(); // Re-fetch transactions to update the journal
+            }}
+            availableCategories={allCategories}
           />
         </DialogContent>
       </Dialog>
@@ -313,7 +396,7 @@ export default function JournalPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {journalEntries.length === 0 && (
+              {journalEntries.length === 0 && !isLoadingPage && (
                 <TableRow>
                   <TableCell colSpan={9} className="text-center text-muted-foreground h-24 print:text-black">
                     Aucune transaction enregistrée pour le moment.
@@ -337,7 +420,7 @@ export default function JournalPage() {
                     {formatCurrencyCFA(entry.balance)}
                   </TableCell>
                   <TableCell className="text-right print:hidden">
-                    <Button variant="ghost" size="icon" onClick={() => handleEditTransaction(entry)} className="mr-1" aria-label="Modifier">
+                    <Button variant="ghost" size="icon" onClick={() => handleEditTransaction(entry)} className="mr-1" aria-label="Modifier" disabled={isLoadingCategories}>
                       <Edit2 className="h-4 w-4" />
                     </Button>
                     <Button variant="ghost" size="icon" onClick={() => handleDeleteTransaction(entry.id)} className="text-destructive hover:text-destructive" aria-label="Supprimer">

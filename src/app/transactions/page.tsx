@@ -22,12 +22,12 @@ import { useDebounce } from "@/hooks/use-debounce";
 export default function TransactionsPage() {
   const { 
     transactions, 
-    isLoading, 
-    error, 
+    isLoadingTransactions, 
+    errorTransactions, 
     deleteTransaction, 
     fetchTransactions 
   } = useTransactions();
-  const { getCategoryById, categories: allCategories, isLoading: isLoadingCategories } = useCategories();
+  const { getCategoryById, categories: allCategories, isLoadingCategories, fetchCategories: fetchCategoriesHook } = useCategories();
   const { toast } = useToast();
 
   const [isFormOpen, setIsFormOpen] = useState(false);
@@ -38,12 +38,16 @@ export default function TransactionsPage() {
   const debouncedSearchTerm = useDebounce(searchTerm, 500);
 
   useEffect(() => {
-    if (error) {
-      toast({ title: "Erreur", description: error, variant: "destructive" });
-    }
-  }, [error, toast]);
+    fetchCategoriesHook(); // Load categories for the form
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
-  // Fetch transactions when filters change
+  useEffect(() => {
+    if (errorTransactions) {
+      toast({ title: "Erreur Transactions", description: errorTransactions, variant: "destructive" });
+    }
+  }, [errorTransactions, toast]);
+
   useEffect(() => {
     const filters: TransactionFilters = {};
     if (debouncedSearchTerm) filters.searchTerm = debouncedSearchTerm;
@@ -66,9 +70,9 @@ export default function TransactionsPage() {
       const success = await deleteTransaction(id);
       if (success) {
         toast({ title: "Succès", description: "Transaction supprimée." });
-        // fetchTransactions(); // Re-fetch after delete if not handled by deleteTransaction hook
+        // fetchTransactions(); // Re-fetch already handled by the hook or filter useEffect
       } else {
-        toast({ title: "Erreur", description: "Impossible de supprimer la transaction.", variant: "destructive" });
+        toast({ title: "Erreur", description: errorTransactions || "Impossible de supprimer la transaction.", variant: "destructive" });
       }
     }
   };
@@ -79,7 +83,8 @@ export default function TransactionsPage() {
 
   const handleFormSubmit = () => {
     setIsFormOpen(false);
-    // fetchTransactions(); // Re-fetch after add/edit, already handled by add/updateTransaction in hook
+    setEditingTransaction(null);
+    // fetchTransactions(); // Re-fetch is handled by the hook or filter useEffect
   };
 
   const clearFilters = () => {
@@ -155,15 +160,15 @@ export default function TransactionsPage() {
           <CardDescription>Une liste de toutes vos activités financières enregistrées.</CardDescription>
         </CardHeader>
         <CardContent>
-          {isLoading && (
+          {isLoadingTransactions && (
             <div className="flex justify-center items-center h-24">
               <Loader2 className="h-8 w-8 animate-spin text-primary" />
             </div>
           )}
-          {!isLoading && error && (
-             <p className="text-center text-destructive">Erreur de chargement des transactions: {error}</p>
+          {!isLoadingTransactions && errorTransactions && (
+             <p className="text-center text-destructive">Erreur de chargement des transactions: {errorTransactions}</p>
           )}
-          {!isLoading && !error && (
+          {!isLoadingTransactions && !errorTransactions && (
             <Table>
               <TableHeader>
                 <TableRow>

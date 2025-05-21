@@ -18,7 +18,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { useSettings } from "@/hooks/use-settings";
 import { useBudgets } from "@/hooks/use-budgets.ts";
 import { useToast } from "@/hooks/use-toast";
-import { Progress } from "@/components/ui/progress"; // Import Progress component
+import { Progress } from "@/components/ui/progress"; 
 
 
 import jsPDF from 'jspdf';
@@ -38,7 +38,7 @@ interface EtatRow {
 export default function EtatsPage() {
   const { transactions, isLoading: isLoadingTransactions, error: errorTransactions, fetchTransactions } = useTransactions();
   const { categories: allCategories, isLoading: isLoadingCategories, error: errorCategories, fetchCategories: fetchCategoriesHook } = useCategories();
-  const { settings, isLoading: isLoadingSettings } = useSettings();
+  const { settings, isLoading: isLoadingSettings, fetchSettings: fetchSettingsHook } = useSettings();
   const { budgets, fetchBudgetsForPeriod, upsertBudget, isLoadingBudgets, budgetError } = useBudgets();
   const { toast } = useToast();
   
@@ -55,6 +55,7 @@ export default function EtatsPage() {
   useEffect(() => {
     fetchTransactions();
     fetchCategoriesHook();
+    fetchSettingsHook();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); 
 
@@ -99,7 +100,7 @@ export default function EtatsPage() {
 
   const filteredTransactions = useMemo(() => {
     return transactions.filter((t) => {
-      const transactionDate = t.date;
+      const transactionDate = t.date; // t.date is already a Date object
       return dateRange?.from && dateRange?.to ? 
         transactionDate >= startOfDay(dateRange.from) && transactionDate <= endOfDay(dateRange.to) : true;
     });
@@ -121,9 +122,9 @@ export default function EtatsPage() {
     if (dateRange?.from) {
       const result = await upsertBudget(categoryId, dateRange.from, numericAmount, type);
       if (!result) {
-        toast({ title: "Erreur", description: `Impossible d'enregistrer le budget pour la catégorie. ${budgetError || ''}`, variant: "destructive"});
+        toast({ title: "Erreur", description: `Impossible d'enregistrer le budget. ${budgetError || ''}`, variant: "destructive"});
       }
-      // else { toast({ title: "Budget Enregistré", description: "Le montant prévu a été sauvegardé."}); }
+       // else { toast({ title: "Budget Enregistré", description: "Le montant prévu a été sauvegardé."}); }
     } else {
       toast({ title: "Erreur", description: "Veuillez sélectionner une période valide pour enregistrer le budget.", variant: "destructive"});
     }
@@ -179,24 +180,59 @@ export default function EtatsPage() {
     return title;
   }, [dateRange]);
 
-  const exportToPDF = () => {
-    if (isLoadingSettings) return;
-    const doc = new jsPDF({ orientation: 'p', unit: 'mm', format: 'a4' });
+  const exportToPDF = async () => {
+    if (isLoadingSettings || !settings) return;
+    const doc = new jsPDF({ orientation: 'p', unit: 'mm', format: 'a4' }); // Portrait for this report
     const tableCellStyles = { fontSize: 8, cellPadding: 1.5 };
     const tableHeaderStyles = { fillColor: [220, 220, 220], textColor: [0,0,0], fontStyle: 'bold' as const, fontSize: 8, halign: 'center' as const };
     
+    let startY = 10;
+     if (settings.companyLogoUrl) {
+        try {
+            const response = await fetch(settings.companyLogoUrl);
+            if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+            const blob = await response.blob();
+            const reader = new FileReader();
+            await new Promise<void>((resolve, reject) => {
+                reader.onload = () => {
+                    doc.addImage(reader.result as string, 'PNG', 14, startY, 30, 15); // Adjust x, y, width, height as needed
+                    resolve();
+                };
+                reader.onerror = reject;
+                reader.readAsDataURL(blob);
+            });
+            startY += 20; // Adjust spacing after logo
+        } catch (error) {
+            console.error("Erreur de chargement du logo pour PDF:", error);
+            // Continuer sans logo si erreur
+        }
+    }
+
     doc.setFontSize(14);
-    doc.text(settings.companyName || "GESTION CAISSE", doc.internal.pageSize.getWidth() / 2, 10, { align: 'center' });
+    doc.text(settings.companyName || "GESTION CAISSE", doc.internal.pageSize.getWidth() / 2, startY, { align: 'center' });
+    startY += 5;
     if (settings.companyAddress) {
       doc.setFontSize(8);
-      doc.text(settings.companyAddress, doc.internal.pageSize.getWidth() / 2, 15, { align: 'center' });
+      doc.text(settings.companyAddress, doc.internal.pageSize.getWidth() / 2, startY, { align: 'center' });
+      startY += 5;
     }
-    doc.setFontSize(12);
-    doc.text(etatTitle, doc.internal.pageSize.getWidth() / 2, 22, { align: 'center' });
-    doc.setFontSize(9);
-    doc.text(`Date d'export: ${currentPrintDate}`, doc.internal.pageSize.getWidth() / 2, 27, { align: 'center' });
+    if (settings.rccm) {
+      doc.setFontSize(8);
+      doc.text(`RCCM: ${settings.rccm}`, 14, startY);
+    }
+    if (settings.niu) {
+      doc.setFontSize(8);
+      doc.text(`NIU: ${settings.niu}`, doc.internal.pageSize.getWidth() - 14 - (doc.getTextWidth(`NIU: ${settings.niu}`)), startY);
+    }
+    startY += 5;
 
-    let startY = 32;
+
+    doc.setFontSize(12);
+    doc.text(etatTitle, doc.internal.pageSize.getWidth() / 2, startY, { align: 'center' });
+    startY += 5;
+    doc.setFontSize(9);
+    doc.text(`Date d'export: ${currentPrintDate}`, doc.internal.pageSize.getWidth() / 2, startY, { align: 'center' });
+    startY += 7;
 
     doc.setFontSize(10);
     doc.text("I- Les Recettes", 14, startY);
@@ -237,7 +273,7 @@ export default function EtatsPage() {
       theme: 'grid',
       styles: {...tableCellStyles, fontStyle: 'bold' as const},
       columnStyles: { 
-        0: { cellWidth: 10 + 50 + 1.5 }, 
+        0: { cellWidth: 10 + 50 + (doc.internal.pageSize.width - (10+50+35+35+20+30) - 28) / 2  }, // Adjust to take remaining width
         1: { cellWidth: 35, halign: 'right' as const },
         2: { cellWidth: 35, halign: 'right' as const },
         3: { cellWidth: 20 },
@@ -289,8 +325,8 @@ export default function EtatsPage() {
       startY: startY,
       theme: 'grid',
       styles: {...tableCellStyles, fontStyle: 'bold' as const},
-      columnStyles: { 
-        0: { cellWidth: 10 + 50 + 1.5 }, 
+       columnStyles: { 
+        0: { cellWidth: 10 + 50 + (doc.internal.pageSize.width - (10+50+35+35+20+30) - 28) / 2  },
         1: { cellWidth: 35, halign: 'right' as const },
         2: { cellWidth: 35, halign: 'right' as const },
         3: { cellWidth: 20 },
@@ -305,13 +341,14 @@ export default function EtatsPage() {
     startY = (doc as any).lastAutoTable.finalY + 8;
     
     doc.setFontSize(10);
+    const balanceSectionWidth = doc.internal.pageSize.getWidth() - 28; // Total width minus margins
     (doc as any).autoTable({
         body: [
             [
-             { content: 'BALANCE', styles: { fontStyle: 'bold' as const, halign: 'left' as const, cellWidth: 45 } }, 
-             { content: `Total Recettes: ${formatCurrencyCFA(totalRecettesRealisees).replace(/\u00A0/g, ' ')}`, styles: {halign: 'right' as const, cellWidth: 50} },
-             { content: `Total Dépenses: ${formatCurrencyCFA(totalDepensesRealisees).replace(/\u00A0/g, ' ')}`, styles: {halign: 'right' as const, cellWidth: 50} },
-             { content: `Solde: ${formatCurrencyCFA(soldeRealise).replace(/\u00A0/g, ' ')}`, styles: { fontStyle: 'bold' as const, halign: 'right' as const, cellWidth: 35} },
+             { content: 'BALANCE', styles: { fontStyle: 'bold' as const, halign: 'left' as const, cellWidth: balanceSectionWidth * 0.25 } }, // 25%
+             { content: `Total Recettes: ${formatCurrencyCFA(totalRecettesRealisees).replace(/\u00A0/g, ' ')}`, styles: {halign: 'right' as const, cellWidth: balanceSectionWidth * 0.25} }, // 25%
+             { content: `Total Dépenses: ${formatCurrencyCFA(totalDepensesRealisees).replace(/\u00A0/g, ' ')}`, styles: {halign: 'right' as const, cellWidth: balanceSectionWidth * 0.25} }, // 25%
+             { content: `Solde: ${formatCurrencyCFA(soldeRealise).replace(/\u00A0/g, ' ')}`, styles: { fontStyle: 'bold' as const, halign: 'right' as const, cellWidth: balanceSectionWidth * 0.25} }, // 25%
             ]
         ],
         startY: startY,
@@ -320,19 +357,22 @@ export default function EtatsPage() {
         tableWidth: 'auto' 
     });
 
-    doc.save(`etat_de_caisse_A4.pdf`);
+    doc.save(`etat_de_caisse_A4_portrait.pdf`);
   };
 
   const exportToXLSX = () => {
-    if (isLoadingSettings) return;
+    if (isLoadingSettings || !settings) return;
     const wb = XLSX.utils.book_new();
     
-    const headerXlsx = [
-      { col1: settings.companyName || "GESTION CAISSE" },
-      ...(settings.companyAddress ? [{ col1: settings.companyAddress }] : []),
-      { col1: etatTitle },
-      { col1: `Date d'export: ${currentPrintDate}` },
-      {}, 
+    const headerXlsx: any[][] = [ // Array of arrays for rows
+      [settings.companyName || "GESTION CAISSE"],
+      ...(settings.companyAddress ? [[settings.companyAddress]] : []),
+      ...(settings.rccm || settings.niu ? [[
+        (settings.rccm ? `RCCM: ${settings.rccm}` : '') + (settings.rccm && settings.niu ? ' | ' : '') + (settings.niu ? `NIU: ${settings.niu}` : '')
+      ]] : []),
+      [etatTitle],
+      [`Date d'export: ${currentPrintDate}`],
+      [], // Empty row for spacing
     ];
 
     const wsDataRecettes = recettesData.map(r => ({
@@ -346,7 +386,7 @@ export default function EtatsPage() {
     wsDataRecettes.push({
       "N°": "", "Types de recettes": "Total Recettes", 
       "Montant Prévu": totalRecettesPrevus, "Montant Réalisé": totalRecettesRealisees, 
-      "% Réal.": null, "Ecart": null
+      "% Réal.": null as any, "Ecart": null as any
     });
     
     const wsDataDepenses = depensesData.map(d => ({
@@ -360,18 +400,18 @@ export default function EtatsPage() {
     wsDataDepenses.push({
       "N°": "", "Types de dépenses": "Total Dépenses", 
       "Montant Prévu": totalDepensesPrevus, "Montant Réalisé": totalDepensesRealisees, 
-      "% Réal.": null, "Ecart": null
+      "% Réal.": null as any, "Ecart": null as any
     });
 
-    const wsSummary = [
-      {}, 
-      { col1: "BALANCE" }, 
-      { col1: "Total Recettes", col2: totalRecettesRealisees },
-      { col1: "Total Dépenses", col2: totalDepensesRealisees },
-      { col1: "Solde", col2: soldeRealise }
+    const wsSummary: any[][] = [ // Array of arrays for rows
+      [], 
+      ["BALANCE"], 
+      ["Total Recettes", totalRecettesRealisees],
+      ["Total Dépenses", totalDepensesRealisees],
+      ["Solde", soldeRealise]
     ];
 
-    const ws = XLSX.utils.json_to_sheet(headerXlsx, {skipHeader: true});
+    const ws = XLSX.utils.aoa_to_sheet(headerXlsx); // Start with header
     const recettesStartRow = headerXlsx.length + 1;
     XLSX.utils.sheet_add_aoa(ws, [["I- Les Recettes"]], {origin: `A${recettesStartRow}`});
     XLSX.utils.sheet_add_json(ws, wsDataRecettes, {origin: `A${recettesStartRow + 1}`, skipHeader: false});
@@ -381,7 +421,7 @@ export default function EtatsPage() {
     XLSX.utils.sheet_add_json(ws, wsDataDepenses, {origin: {r: depensesStartRow, c: 0}, skipHeader: false}); 
     
     const summaryStartRow = depensesStartRow + wsDataDepenses.length + 1;
-    XLSX.utils.sheet_add_json(ws, wsSummary, {origin: {r: summaryStartRow -1, c:0}, skipHeader: true});
+    XLSX.utils.sheet_add_aoa(ws, wsSummary, {origin: {r: summaryStartRow -1, c:0}, skipHeader: true});
 
 
     ws['!cols'] = [{wch:5}, {wch:30}, {wch:15}, {wch:15}, {wch:10}, {wch:15}];
@@ -410,25 +450,22 @@ export default function EtatsPage() {
     if (ws[`B${balanceDataStartRow + 2}`]) ws[`B${balanceDataStartRow + 2}`].z = currencyFormat; 
 
     if(!ws['!merges']) ws['!merges'] = [];
-    ws['!merges'].push({s: {r:0, c:0}, e: {r:0, c:5}}); 
-    if (settings.companyAddress) {
-        ws['!merges'].push({s: {r:1, c:0}, e: {r:1, c:5}}); 
-        ws['!merges'].push({s: {r:2, c:0}, e: {r:2, c:5}}); 
-        ws['!merges'].push({s: {r:3, c:0}, e: {r:3, c:5}}); 
-    } else {
-        ws['!merges'].push({s: {r:1, c:0}, e: {r:1, c:5}}); 
-        ws['!merges'].push({s: {r:2, c:0}, e: {r:2, c:5}}); 
-    }
-    ws['!merges'].push({s: {r:recettesStartRow-1, c:0}, e: {r:recettesStartRow-1, c:5}}); 
-    ws['!merges'].push({s: {r:depensesStartRow -1, c:0}, e: {r:depensesStartRow -1, c:5}}); 
-    ws['!merges'].push({s: {r:summaryStartRow -1, c:0}, e: {r:summaryStartRow -1, c:5}}); 
+    const maxColIndexXlsx = ws['!cols'].length -1;
+    headerXlsx.forEach((_, rowIndex) => {
+        if (rowIndex < headerXlsx.length -1) { 
+             ws['!merges']?.push({s: {r:rowIndex, c:0}, e: {r:rowIndex, c:maxColIndexXlsx}});
+        }
+    });
+    ws['!merges'].push({s: {r:recettesStartRow-1, c:0}, e: {r:recettesStartRow-1, c:maxColIndexXlsx}}); 
+    ws['!merges'].push({s: {r:depensesStartRow -1, c:0}, e: {r:depensesStartRow -1, c:maxColIndexXlsx}}); 
+    ws['!merges'].push({s: {r:summaryStartRow -1, c:0}, e: {r:summaryStartRow -1, c:maxColIndexXlsx}}); 
     
     XLSX.utils.book_append_sheet(wb, ws, "Etat de Caisse");
     XLSX.writeFile(wb, "etat_de_caisse.xlsx");
   };
 
   const handlePrint = () => {
-    if (isLoadingSettings) return;
+    if (isLoadingSettings || !settings) return;
     window.print();
   };
 
@@ -459,7 +496,7 @@ export default function EtatsPage() {
                 <TableCell className="text-right print:text-black">
                   <Input
                     type="number"
-                    value={(type === 'income' ? prevusRecettes[row.id] : prevusDepenses[row.id]) || ''}
+                    value={(type === 'income' ? prevusRecettes[row.id] : prevusDepenses[row.id]) ?? ''}
                     onChange={(e) => handlePrevuChange(row.id, e.target.value, type)}
                     onBlur={() => handleSaveBudget(row.id, type)}
                     className="w-32 text-right print:border-none print:bg-transparent print:p-0"
@@ -497,10 +534,15 @@ export default function EtatsPage() {
   );
 
   const printHeader = (
-     <div className="print:block hidden my-6 text-center">
+     <div className="print:block hidden my-4 text-center">
+        {settings.companyLogoUrl && <img src={settings.companyLogoUrl} alt="Logo Entreprise" className="h-16 mx-auto mb-2 object-contain" data-ai-hint="company logo"/>}
         <h1 className="text-xl font-bold text-primary print:text-black">{settings.companyName || "GESTION CAISSE"}</h1>
         {settings.companyAddress && <p className="text-sm print:text-black">{settings.companyAddress}</p>}
-        <h2 className="text-lg font-semibold mt-1 print:text-black">{etatTitle}</h2>
+        <div className="flex justify-between text-xs mt-1 px-2">
+            <span>{settings.rccm ? `RCCM: ${settings.rccm}` : ''}</span>
+            <span>{settings.niu ? `NIU: ${settings.niu}` : ''}</span>
+        </div>
+        <h2 className="text-lg font-semibold mt-2 print:text-black">{etatTitle}</h2>
         {currentPrintDate && <p className="text-xs text-muted-foreground mt-1 print:text-black">Imprimé le: {currentPrintDate}</p>}
       </div>
   );
@@ -544,7 +586,7 @@ export default function EtatsPage() {
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
               <DropdownMenuItem onClick={exportToPDF} disabled={isLoadingSettings || isLoadingBudgets}>
-                <FileText className="mr-2 h-4 w-4" /> Exporter en PDF (A4)
+                <FileText className="mr-2 h-4 w-4" /> Exporter en PDF (A4 Portrait)
               </DropdownMenuItem>
               <DropdownMenuItem onClick={exportToXLSX} disabled={isLoadingSettings || isLoadingBudgets}>
                 <FileSpreadsheet className="mr-2 h-4 w-4" /> Exporter en XLSX
@@ -587,7 +629,7 @@ export default function EtatsPage() {
         </CardContent>
       </Card>
       
-      {isLoadingCategories || isLoadingBudgets ? ( 
+      {(isLoadingCategories || isLoadingBudgets) && (!recettesData.length && !depensesData.length) ? ( 
         <div className="flex justify-center items-center h-24"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>
       ) : (
         <>
@@ -625,4 +667,3 @@ export default function EtatsPage() {
     </div>
   );
 }
-

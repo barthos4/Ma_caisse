@@ -9,8 +9,8 @@ import type { Transaction, Category } from "@/types";
 import { DateRange } from "react-day-picker";
 import { format, startOfMonth, endOfMonth, subMonths, startOfWeek, endOfWeek, subWeeks, startOfDay, endOfDay, subDays, isSameDay } from "date-fns";
 import { fr } from 'date-fns/locale';
-import { Bar, XAxis, YAxis, CartesianGrid, Pie, Cell, PieChart as RechartsPieChart, BarChart as RechartsBarChart } from 'recharts'; // Keep original recharts imports for now
-import * as RechartsPrimitive from "recharts"; // Added import
+import { Cell, PieChart as RechartsPieChart, BarChart as RechartsBarChart } from 'recharts';
+import * as RechartsPrimitive from "recharts"; 
 import { formatCurrencyCFA } from "@/lib/utils";
 import {
   ChartContainer,
@@ -22,27 +22,43 @@ import {
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { Download, Printer, FileText, FileSpreadsheet, ChevronDown } from "lucide-react";
+import { Download, Printer, FileText, FileSpreadsheet, ChevronDown, Loader2 } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { useSettings } from "@/hooks/use-settings"; // Import useSettings
+import { useSettings } from "@/hooks/use-settings"; 
 
 import jsPDF from 'jspdf';
 import 'jspdf-autotable';
 import * as XLSX from 'xlsx';
 
 export default function ReportsPage() {
-  const { getTransactions } = useTransactions();
-  const { getCategories, getCategoryById } = useCategories();
-  const { settings, isLoading: isLoadingSettings } = useSettings(); // Use settings hook
-  const allTransactions = getTransactions();
-  const allCategories = getCategories();
-
+  const { 
+    transactions: allTransactions, 
+    isLoadingTransactions, 
+    errorTransactions,
+    fetchTransactions 
+  } = useTransactions();
+  const { 
+    categories: allCategories, 
+    getCategoryById, 
+    isLoadingCategories, 
+    fetchCategories: fetchCategoriesHook 
+  } = useCategories();
+  const { settings, isLoading: isLoadingSettings, fetchSettings: fetchSettingsHook } = useSettings();
+  
   const [currentPrintDate, setCurrentPrintDate] = useState("");
+
+   useEffect(() => {
+    // Initial data fetch
+    fetchTransactions();
+    fetchCategoriesHook();
+    fetchSettingsHook();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     setCurrentPrintDate(format(new Date(), 'dd/MM/yyyy', { locale: fr }));
@@ -208,8 +224,8 @@ export default function ReportsPage() {
     }
   };
 
-  const exportDetailedToPDF = () => {
-    if (isLoadingSettings) return;
+  const exportDetailedToPDF = async () => {
+    if (isLoadingSettings || !settings) return;
     const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' }); 
     const tableColumn = ["N° Ord.", "Date", "Description", "Réf.", "Catégorie", "Type", "Montant"];
     const tableRows: (string | number)[][] = [];
@@ -227,21 +243,58 @@ export default function ReportsPage() {
       tableRows.push(entryData);
     });
 
+    let startY = 10;
+    if (settings.companyLogoUrl) {
+        try {
+            const response = await fetch(settings.companyLogoUrl);
+            if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+            const blob = await response.blob();
+            const reader = new FileReader();
+            await new Promise<void>((resolve, reject) => {
+                reader.onload = () => {
+                    doc.addImage(reader.result as string, 'PNG', 14, startY, 30, 15); 
+                    resolve();
+                };
+                reader.onerror = reject;
+                reader.readAsDataURL(blob);
+            });
+            startY += 20; 
+        } catch (error) {
+            console.error("Erreur de chargement du logo pour PDF (Rapports):", error);
+        }
+    }
+
     doc.setFontSize(14);
-    doc.text(settings.companyName || "GESTION CAISSE", doc.internal.pageSize.getWidth() / 2, 10, { align: 'center' });
+    doc.text(settings.companyName || "GESTION CAISSE", doc.internal.pageSize.getWidth() / 2, startY, { align: 'center' });
+    startY += 5;
     if (settings.companyAddress) {
       doc.setFontSize(8);
-      doc.text(settings.companyAddress, doc.internal.pageSize.getWidth() / 2, 15, { align: 'center' });
+      doc.text(settings.companyAddress, doc.internal.pageSize.getWidth() / 2, startY, { align: 'center' });
+      startY += 5;
     }
+     if (settings.rccm) {
+      doc.setFontSize(8);
+      doc.text(`RCCM: ${settings.rccm}`, 14, startY);
+    }
+    if (settings.niu) {
+      doc.setFontSize(8);
+      doc.text(`NIU: ${settings.niu}`, doc.internal.pageSize.getWidth() - 14 - (doc.getTextWidth(`NIU: ${settings.niu}`)), startY);
+    }
+    startY += 5;
+
+
     doc.setFontSize(12);
-    doc.text(reportTitle, doc.internal.pageSize.getWidth() / 2, 22, { align: 'center' });
+    doc.text(reportTitle, doc.internal.pageSize.getWidth() / 2, startY, { align: 'center' });
+    startY += 5;
     doc.setFontSize(9);
-    doc.text(`Date d'export: ${currentPrintDate}`, doc.internal.pageSize.getWidth() / 2, 27, { align: 'center' });
+    doc.text(`Date d'export: ${currentPrintDate}`, doc.internal.pageSize.getWidth() / 2, startY, { align: 'center' });
+    startY += 7;
+
 
     (doc as any).autoTable({
       head: [tableColumn],
       body: tableRows,
-      startY: 32,
+      startY: startY,
       theme: 'grid',
       headStyles: { fillColor: [22, 160, 133], fontSize: 7, textColor: [255,255,255] }, 
       styles: { font: 'helvetica', fontSize: 7, cellPadding: 1, overflow: 'linebreak' }, 
@@ -255,17 +308,20 @@ export default function ReportsPage() {
         6: { cellWidth: 30, halign: 'right' as const }, 
       }
     });
-    doc.save("rapport_transactions_detaillees_A4.pdf");
+    doc.save("rapport_transactions_A4_paysage.pdf");
   };
 
   const exportDetailedToXLSX = () => {
-    if (isLoadingSettings) return;
-    const headerXlsx = [
-      { col1: settings.companyName || "GESTION CAISSE" },
-      ...(settings.companyAddress ? [{ col1: settings.companyAddress }] : []),
-      { col1: reportTitle },
-      { col1: `Date d'export: ${currentPrintDate}` },
-      {}, 
+    if (isLoadingSettings || !settings) return;
+     const headerXlsx: any[][] = [
+      [settings.companyName || "GESTION CAISSE"],
+      ...(settings.companyAddress ? [[settings.companyAddress]] : []),
+      ...(settings.rccm || settings.niu ? [[
+        (settings.rccm ? `RCCM: ${settings.rccm}` : '') + (settings.rccm && settings.niu ? ' | ' : '') + (settings.niu ? `NIU: ${settings.niu}` : '')
+      ]] : []),
+      [reportTitle],
+      [`Date d'export: ${currentPrintDate}`],
+      [], 
     ];
     
     const worksheetData = filteredTransactions.map(t => ({
@@ -278,24 +334,20 @@ export default function ReportsPage() {
       'Montant (F CFA)': t.amount
     }));
 
-    const worksheet = XLSX.utils.json_to_sheet(headerXlsx, {skipHeader: true});
+    const worksheet = XLSX.utils.aoa_to_sheet(headerXlsx);
     XLSX.utils.sheet_add_json(worksheet, worksheetData, {origin: `A${headerXlsx.length + 1}`}); 
     
     const colWidths = [ {wch:10}, {wch:12}, {wch:40}, {wch:15}, {wch:25}, {wch:15}, {wch:20} ];
     worksheet['!cols'] = colWidths;
 
     if(!worksheet['!merges']) worksheet['!merges'] = [];
-    worksheet['!merges'].push({s: {r:0, c:0}, e: {r:0, c:6}}); 
-    if (settings.companyAddress) {
-      worksheet['!merges'].push({s: {r:1, c:0}, e: {r:1, c:6}}); 
-      worksheet['!merges'].push({s: {r:2, c:0}, e: {r:2, c:6}}); 
-      worksheet['!merges'].push({s: {r:3, c:0}, e: {r:3, c:6}}); 
-    } else {
-      worksheet['!merges'].push({s: {r:1, c:0}, e: {r:1, c:6}}); 
-      worksheet['!merges'].push({s: {r:2, c:0}, e: {r:2, c:6}}); 
-    }
-
-     // Apply currency format
+    const maxColIndexXlsx = colWidths.length - 1;
+    headerXlsx.forEach((_, rowIndex) => {
+        if (rowIndex < headerXlsx.length -1) { 
+             worksheet['!merges']?.push({s: {r:rowIndex, c:0}, e: {r:rowIndex, c:maxColIndexXlsx}});
+        }
+    });
+    
     const currencyFormat = '#,##0 "F CFA"';
     const firstDataRowXlsx = headerXlsx.length + 2;
     for (let i = 0; i < worksheetData.length; i++) {
@@ -309,18 +361,38 @@ export default function ReportsPage() {
   };
 
   const handlePrintDetailed = () => {
-    if (isLoadingSettings) return;
+    if (isLoadingSettings || !settings) return;
     window.print();
   };
 
   const printHeader = (
-    <div className="print:block hidden my-6 text-center">
+    <div className="print:block hidden my-4 text-center">
+      {settings.companyLogoUrl && <img src={settings.companyLogoUrl} alt="Logo Entreprise" className="h-16 mx-auto mb-2 object-contain" data-ai-hint="company logo"/>}
       <h1 className="text-xl font-bold text-primary print:text-black">{settings.companyName || "GESTION CAISSE"}</h1>
       {settings.companyAddress && <p className="text-sm print:text-black">{settings.companyAddress}</p>}
-      <h2 className="text-lg font-semibold mt-1 print:text-black">{reportTitle}</h2>
+       <div className="flex justify-between text-xs mt-1 px-2">
+            <span>{settings.rccm ? `RCCM: ${settings.rccm}` : ''}</span>
+            <span>{settings.niu ? `NIU: ${settings.niu}` : ''}</span>
+      </div>
+      <h2 className="text-lg font-semibold mt-2 print:text-black">{reportTitle}</h2>
       {currentPrintDate && <p className="text-xs text-muted-foreground mt-1 print:text-black">Imprimé le: {currentPrintDate}</p>}
     </div>
   );
+
+  const isLoadingPage = isLoadingTransactions || isLoadingCategories || isLoadingSettings;
+  const globalError = errorTransactions || errorCategories;
+
+  if (isLoadingPage && !filteredTransactions.length && !allCategories.length) {
+    return (
+      <div className="flex justify-center items-center h-64">
+        <Loader2 className="h-12 w-12 animate-spin text-primary" />
+      </div>
+    );
+  }
+  if (!isLoadingPage && globalError) {
+    return <div className="text-center text-destructive py-10"><p>Erreur de chargement des données des rapports: {globalError}</p></div>;
+  }
+
 
   return (
     <div className="space-y-6 print:space-y-2">
@@ -406,15 +478,15 @@ export default function ReportsPage() {
             {spendingByCategory.length > 0 ? (
               <ChartContainer config={chartConfig} className="min-h-[200px] w-full">
                  <RechartsPrimitive.BarChart accessibilityLayer data={spendingByCategory} layout="vertical" margin={{left: 20, right:20}}>
-                    <CartesianGrid horizontal={false} />
-                    <XAxis type="number" dataKey="value" tickFormatter={(value) => formatCurrencyCFA(value).replace(/\u00A0/g, ' ')} hide/>
-                    <YAxis dataKey="name" type="category" tickLine={false} axisLine={false} tickMargin={8} width={120} />
+                    <RechartsPrimitive.CartesianGrid horizontal={false} />
+                    <RechartsPrimitive.XAxis type="number" dataKey="value" tickFormatter={(value) => formatCurrencyCFA(value).replace(/\u00A0/g, ' ')} hide/>
+                    <RechartsPrimitive.YAxis dataKey="name" type="category" tickLine={false} axisLine={false} tickMargin={8} width={120} />
                     <ShadTooltip cursor={false} content={<CustomTooltip />} />
-                    <Bar dataKey="value" layout="vertical" radius={5}>
+                    <RechartsPrimitive.Bar dataKey="value" layout="vertical" radius={5}>
                        {spendingByCategory.map((entry, index) => (
                          <Cell key={`cell-expense-${index}`} fill={`hsl(var(--chart-${(index % 5) + 1}))`} />
                        ))}
-                    </Bar>
+                    </RechartsPrimitive.Bar>
                   </RechartsPrimitive.BarChart>
               </ChartContainer>
             ) : <p className="text-center text-muted-foreground pt-10">Aucune donnée de dépense pour la période/filtres sélectionnés.</p>}
@@ -431,7 +503,7 @@ export default function ReportsPage() {
               <ChartContainer config={chartConfig} className="min-h-[200px] w-full">
                  <RechartsPrimitive.PieChart>
                     <ShadTooltip content={<CustomTooltip />} />
-                    <Pie data={incomeByCategory} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={100} labelLine={false} 
+                    <RechartsPrimitive.Pie data={incomeByCategory} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={100} labelLine={false} 
                          label={({ cx, cy, midAngle, innerRadius, outerRadius, percent, index, name }) => {
                             const RADIAN = Math.PI / 180;
                             const radius = innerRadius + (outerRadius - innerRadius) * 0.5;
@@ -447,7 +519,7 @@ export default function ReportsPage() {
                         {incomeByCategory.map((entry, index) => (
                           <Cell key={`cell-income-${index}`} fill={`hsl(var(--chart-${(index % 5) + 1}))`} />
                         ))}
-                    </Pie>
+                    </RechartsPrimitive.Pie>
                     <ShadLegend content={<ChartLegendContent nameKey="name" />} />
                  </RechartsPrimitive.PieChart>
               </ChartContainer>
@@ -456,10 +528,8 @@ export default function ReportsPage() {
         </Card>
       </div>
 
-      {/* Section for Print Header */}
       {printHeader}
 
-      {/* Detailed Transactions Table */}
       <Card className="print:shadow-none print:border-none print:bg-transparent">
         <CardHeader className="print:hidden">
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
@@ -471,7 +541,8 @@ export default function ReportsPage() {
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button className="w-full sm:w-auto" disabled={isLoadingSettings}>
-                    <Download className="mr-2 h-4 w-4" /> Exporter <ChevronDown className="ml-2 h-4 w-4" />
+                    {isLoadingSettings ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Download className="mr-2 h-4 w-4" />}
+                    Exporter <ChevronDown className="ml-2 h-4 w-4" />
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
@@ -479,7 +550,7 @@ export default function ReportsPage() {
                     <FileText className="mr-2 h-4 w-4" /> Exporter en CSV
                   </DropdownMenuItem>
                   <DropdownMenuItem onClick={exportDetailedToPDF} disabled={isLoadingSettings}>
-                    <FileText className="mr-2 h-4 w-4" /> Exporter en PDF (A4)
+                    <FileText className="mr-2 h-4 w-4" /> Exporter en PDF (A4 Paysage)
                   </DropdownMenuItem>
                   <DropdownMenuItem onClick={exportDetailedToXLSX} disabled={isLoadingSettings}>
                     <FileSpreadsheet className="mr-2 h-4 w-4" /> Exporter en XLSX
@@ -487,7 +558,8 @@ export default function ReportsPage() {
                 </DropdownMenuContent>
               </DropdownMenu>
               <Button onClick={handlePrintDetailed} variant="outline" className="w-full sm:w-auto" disabled={isLoadingSettings}>
-                <Printer className="mr-2 h-4 w-4" /> Imprimer
+                {isLoadingSettings ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Printer className="mr-2 h-4 w-4" />}
+                 Imprimer
               </Button>
             </div>
           </div>
@@ -506,7 +578,7 @@ export default function ReportsPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filteredTransactions.length === 0 && (
+              {filteredTransactions.length === 0 && !isLoadingPage &&(
                 <TableRow>
                   <TableCell colSpan={7} className="text-center text-muted-foreground h-24 print:text-black">
                     Aucune transaction pour les filtres sélectionnés.
@@ -546,6 +618,3 @@ export default function ReportsPage() {
     </div>
   );
 }
-    
-
-    

@@ -1,6 +1,6 @@
 // Ce fichier sera remplacé par les types générés par Supabase CLI
 // supabase gen types typescript --project-id <votre-project-id> --schema public > src/types/supabase.ts
-// En attendant, nous allons définir une structure basique.
+// Assurez-vous de régénérer ce fichier après avoir modifié votre schéma de base de données.
 
 export type Json =
   | string
@@ -107,6 +107,9 @@ export type Database = {
           user_id: string // uuid, primary key, references auth.users
           company_name: string | null
           company_address: string | null
+          company_logo_url: string | null // Nouveau champ
+          rccm: string | null // Nouveau champ
+          niu: string | null // Nouveau champ
           created_at: string // timestamptz
           updated_at: string // timestamptz
         }
@@ -114,6 +117,9 @@ export type Database = {
           user_id: string
           company_name?: string | null
           company_address?: string | null
+          company_logo_url?: string | null // Nouveau champ
+          rccm?: string | null // Nouveau champ
+          niu?: string | null // Nouveau champ
           created_at?: string
           updated_at?: string
         }
@@ -121,6 +127,9 @@ export type Database = {
           user_id?: string
           company_name?: string | null
           company_address?: string | null
+          company_logo_url?: string | null // Nouveau champ
+          rccm?: string | null // Nouveau champ
+          niu?: string | null // Nouveau champ
           created_at?: string
           updated_at?: string
         }
@@ -133,7 +142,7 @@ export type Database = {
           }
         ]
       }
-      budgets: { // Ajout de la structure pour la table budgets
+      budgets: {
         Row: {
           id: string // uuid
           user_id: string // uuid

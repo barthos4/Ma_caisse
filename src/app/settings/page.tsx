@@ -18,6 +18,9 @@ import { Loader2 } from "lucide-react";
 const settingsFormSchema = z.object({
   companyName: z.string().max(100, "Le nom de l'entreprise est trop long.").optional().nullable(),
   companyAddress: z.string().max(200, "L'adresse de l'entreprise est trop longue.").optional().nullable(),
+  companyLogoUrl: z.string().url("Veuillez entrer une URL valide pour le logo.").optional().nullable().or(z.literal('')),
+  rccm: z.string().max(50, "Le RCCM est trop long.").optional().nullable(),
+  niu: z.string().max(50, "Le NIU est trop long.").optional().nullable(),
 });
 
 type SettingsFormValues = z.infer<typeof settingsFormSchema>;
@@ -30,16 +33,22 @@ export default function SettingsPage() {
   const form = useForm<SettingsFormValues>({
     resolver: zodResolver(settingsFormSchema),
     defaultValues: {
-      companyName: settings.companyName || "",
-      companyAddress: settings.companyAddress || "",
+      companyName: "",
+      companyAddress: "",
+      companyLogoUrl: "",
+      rccm: "",
+      niu: "",
     },
   });
 
   useEffect(() => {
-    if (!isLoadingSettings) {
+    if (settings && !isLoadingSettings) {
       form.reset({
         companyName: settings.companyName || "",
         companyAddress: settings.companyAddress || "",
+        companyLogoUrl: settings.companyLogoUrl || "",
+        rccm: settings.rccm || "",
+        niu: settings.niu || "",
       });
     }
   }, [settings, isLoadingSettings, form]);
@@ -52,18 +61,24 @@ export default function SettingsPage() {
 
   async function onSubmit(data: SettingsFormValues) {
     setIsSubmitting(true);
-    const success = await updateSettings(data);
+    const success = await updateSettings({
+      companyName: data.companyName,
+      companyAddress: data.companyAddress,
+      companyLogoUrl: data.companyLogoUrl || null, // Ensure null if empty string
+      rccm: data.rccm,
+      niu: data.niu,
+    });
     setIsSubmitting(false);
     if (success) {
       toast({
         title: "Paramètres enregistrés",
         description: "Vos modifications ont été sauvegardées avec succès.",
       });
-      fetchSettings(); // Re-fetch to confirm and update local state if needed
+      fetchSettings(); 
     } else {
       toast({
         title: "Erreur",
-        description: "Impossible d'enregistrer les paramètres.",
+        description: `Impossible d'enregistrer les paramètres. ${error || ''}`,
         variant: "destructive",
       });
     }
@@ -71,7 +86,7 @@ export default function SettingsPage() {
 
   const isLoading = isLoadingSettings || isSubmitting;
 
-  if (isLoadingSettings && !settings.companyName) { // Affiche le loader seulement au premier chargement
+  if (isLoadingSettings && !form.formState.isDirty && !settings.companyName) { 
     return (
       <div className="space-y-6 flex flex-col items-center justify-center min-h-[300px]">
         <Loader2 className="h-12 w-12 animate-spin text-primary" />
@@ -125,10 +140,50 @@ export default function SettingsPage() {
                   </FormItem>
                 )}
               />
+              <FormField
+                control={form.control}
+                name="companyLogoUrl"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>URL du Logo de l'entreprise</FormLabel>
+                    <FormControl>
+                      <Input type="url" placeholder="https://exemple.com/logo.png" {...field} value={field.value ?? ""} disabled={isLoading} />
+                    </FormControl>
+                    <FormDescription>Collez l'URL d'un logo hébergé en ligne.</FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="rccm"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>N° RCCM</FormLabel>
+                    <FormControl>
+                      <Input placeholder="Ex: RC/DLA/2024/A/1234" {...field} value={field.value ?? ""} disabled={isLoading} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="niu"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>N° NIU (Contribuable)</FormLabel>
+                    <FormControl>
+                      <Input placeholder="Ex: M012345678901X" {...field} value={field.value ?? ""} disabled={isLoading} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
             </CardContent>
             <CardFooter className="border-t px-6 py-4">
               <Button type="submit" disabled={isLoading}>
-                {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                 Enregistrer les Informations
               </Button>
             </CardFooter>

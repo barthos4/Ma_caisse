@@ -4,12 +4,15 @@
 import { useState, useEffect, useCallback } from 'react';
 import type { AppSettings } from '@/types';
 import { supabase } from '@/lib/supabaseClient';
-import { useAuth } from './use-auth.tsx'; // Updated import path // Pour obtenir user.id
+import { useAuth } from './use-auth.tsx';
 import type { TablesInsert, TablesUpdate } from '@/types/supabase';
 
 const defaultSettings: AppSettings = {
   companyName: "Mon Entreprise",
   companyAddress: "123 Rue Principale, Ville, Pays",
+  companyLogoUrl: null,
+  rccm: null,
+  niu: null,
 };
 
 export function useSettings() {
@@ -20,6 +23,7 @@ export function useSettings() {
 
   const fetchSettings = useCallback(async () => {
     if (!user) {
+      setSettings(defaultSettings); // Reset to default if no user
       setIsLoading(false);
       return;
     }
@@ -36,15 +40,15 @@ export function useSettings() {
         throw fetchError;
       }
       if (data) {
-        setSettings(data);
+        setSettings({
+            companyName: data.company_name,
+            companyAddress: data.company_address,
+            companyLogoUrl: data.company_logo_url,
+            rccm: data.rccm,
+            niu: data.niu,
+        });
       } else {
-        // Si aucune donnée, on utilise les valeurs par défaut et on essaie de les insérer
-        const initialSettingsData: TablesInsert<'app_settings'> = {
-            user_id: user.id,
-            company_name: defaultSettings.companyName,
-            company_address: defaultSettings.companyAddress,
-        };
-        await supabase.from('app_settings').insert(initialSettingsData);
+        // No settings found, use defaults (they might be inserted on first update)
         setSettings(defaultSettings);
       }
     } catch (e: any) {
@@ -54,8 +58,7 @@ export function useSettings() {
     } finally {
       setIsLoading(false);
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user]); // Dépendance à user
+  }, [user]);
 
   useEffect(() => {
     fetchSettings();
@@ -66,26 +69,44 @@ export function useSettings() {
       setError("Utilisateur non authentifié.");
       return false;
     }
+    setIsLoading(true); // Indicate saving
     setError(null);
     try {
-      const settingsUpdate: TablesUpdate<'app_settings'> = {
-        ...newSettings,
-        user_id: user.id, // Assurez-vous que user_id est inclus car c'est la PK
+      const settingsToUpsert: TablesInsert<'app_settings'> = { // Use Insert type for upsert
+        user_id: user.id, 
+        company_name: newSettings.companyName !== undefined ? newSettings.companyName : settings.companyName,
+        company_address: newSettings.companyAddress !== undefined ? newSettings.companyAddress : settings.companyAddress,
+        company_logo_url: newSettings.companyLogoUrl !== undefined ? newSettings.companyLogoUrl : settings.companyLogoUrl,
+        rccm: newSettings.rccm !== undefined ? newSettings.rccm : settings.rccm,
+        niu: newSettings.niu !== undefined ? newSettings.niu : settings.niu,
         updated_at: new Date().toISOString(),
       };
-
-      const { error: updateError } = await supabase
-        .from('app_settings')
-        .upsert(settingsUpdate, { onConflict: 'user_id' }); // Upsert pour créer si n'existe pas ou mettre à jour
-
-      if (updateError) throw updateError;
       
-      // Re-fetch or update local state
-      setSettings(prev => ({ ...prev, ...newSettings }));
+      // Ensure we don't try to set undefined values if they were not in newSettings
+      if (newSettings.companyName === undefined) delete (settingsToUpsert as any).company_name;
+      if (newSettings.companyAddress === undefined) delete (settingsToUpsert as any).company_address;
+      if (newSettings.companyLogoUrl === undefined) delete (settingsToUpsert as any).company_logo_url;
+      if (newSettings.rccm === undefined) delete (settingsToUpsert as any).rccm;
+      if (newSettings.niu === undefined) delete (settingsToUpsert as any).niu;
+
+
+      const { error: upsertError } = await supabase
+        .from('app_settings')
+        .upsert(settingsToUpsert, { onConflict: 'user_id' });
+
+      if (upsertError) throw upsertError;
+      
+      // Update local state immediately with potentially merged settings
+      setSettings(prev => ({
+        ...prev,
+        ...newSettings // Apply only the changes that were passed
+      }));
+      setIsLoading(false);
       return true;
     } catch (e: any) {
       console.error("Erreur lors de la sauvegarde des paramètres de l'application:", e);
       setError(e.message || "Erreur de sauvegarde des paramètres.");
+      setIsLoading(false);
       return false;
     }
   }, [user, settings]);
@@ -95,6 +116,6 @@ export function useSettings() {
     isLoading,
     error,
     updateSettings,
-    fetchSettings, // Exposer pour re-fetch manuel si besoin
+    fetchSettings,
   };
 }
