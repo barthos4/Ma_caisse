@@ -6,40 +6,43 @@ import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card";
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage, FormDescription } from "@/components/ui/form";
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { useSettings } from "@/hooks/use-settings";
 import { useToast } from "@/hooks/use-toast";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { Separator } from "@/components/ui/separator";
-import { Loader2 } from "lucide-react";
+import { Loader2, UploadCloud } from "lucide-react";
+import Image from "next/image";
 
 const settingsFormSchema = z.object({
   companyName: z.string().max(100, "Le nom de l'entreprise est trop long.").optional().nullable(),
   companyAddress: z.string().max(200, "L'adresse de l'entreprise est trop longue.").optional().nullable(),
-  companyLogoUrl: z.string().url("Veuillez entrer une URL valide pour le logo.").optional().nullable().or(z.literal('')),
+  // companyLogoUrl est géré séparément pour le téléversement
   rccm: z.string().max(50, "Le RCCM est trop long.").optional().nullable(),
   niu: z.string().max(50, "Le NIU est trop long.").optional().nullable(),
-  companyContact: z.string().max(100, "Le contact est trop long.").optional().nullable(), // Nouveau champ
+  companyContact: z.string().max(100, "Le contact est trop long.").optional().nullable(),
 });
 
 type SettingsFormValues = z.infer<typeof settingsFormSchema>;
 
 export default function SettingsPage() {
-  const { settings, updateSettings, isLoading: isLoadingSettings, error, fetchSettings } = useSettings();
+  const { settings, updateSettings, isLoading: isLoadingSettings, error: settingsHookError, fetchSettings, uploadCompanyLogo } = useSettings();
   const { toast } = useToast();
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [selectedLogoFile, setSelectedLogoFile] = useState<File | null>(null);
+  const [logoPreview, setLogoPreview] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const form = useForm<SettingsFormValues>({
     resolver: zodResolver(settingsFormSchema),
     defaultValues: {
       companyName: "",
       companyAddress: "",
-      companyLogoUrl: "",
       rccm: "",
       niu: "",
-      companyContact: "", // Valeur par défaut pour le nouveau champ
+      companyContact: "",
     },
   });
 
@@ -48,53 +51,87 @@ export default function SettingsPage() {
       form.reset({
         companyName: settings.companyName || "",
         companyAddress: settings.companyAddress || "",
-        companyLogoUrl: settings.companyLogoUrl || "",
         rccm: settings.rccm || "",
         niu: settings.niu || "",
-        companyContact: settings.companyContact || "", // Réinitialisation avec le nouveau champ
+        companyContact: settings.companyContact || "",
       });
+      if (settings.companyLogoUrl) {
+        setLogoPreview(settings.companyLogoUrl);
+      } else {
+        setLogoPreview(null);
+      }
     }
   }, [settings, isLoadingSettings, form]);
 
   useEffect(() => {
-    if (error) {
-        toast({ title: "Erreur Paramètres", description: error, variant: "destructive"})
+    if (settingsHookError) {
+        toast({ title: "Erreur Paramètres", description: settingsHookError, variant: "destructive"})
     }
-  }, [error, toast]);
+  }, [settingsHookError, toast]);
+
+  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    if (event.target.files && event.target.files[0]) {
+      const file = event.target.files[0];
+      setSelectedLogoFile(file);
+      setLogoPreview(URL.createObjectURL(file)); // Afficher un aperçu local
+    }
+  };
 
   async function onSubmit(data: SettingsFormValues) {
     setIsSubmitting(true);
-    const settingsToUpdate: Partial<SettingsFormValues> = {};
-    // Only include fields that have actually changed to avoid sending full default object
-    (Object.keys(data) as Array<keyof SettingsFormValues>).forEach(key => {
-      if (data[key] !== settings[key] && (data[key] !== "" || settings[key] !== null)) { // Consider empty string vs null
-         if (key === 'companyLogoUrl' && data[key] === '') {
-            settingsToUpdate[key] = null; // Ensure empty URL is saved as null
-        } else {
-            settingsToUpdate[key] = data[key];
-        }
+    let logoUrlToSave = settings.companyLogoUrl; // Garder l'ancien logo par défaut
+
+    if (selectedLogoFile) {
+      const { publicUrl: uploadedLogoUrl, error: uploadError } = await uploadCompanyLogo(selectedLogoFile);
+      if (uploadError) {
+        toast({ title: "Erreur de Téléversement", description: uploadError, variant: "destructive" });
+        setIsSubmitting(false);
+        return;
       }
+      logoUrlToSave = uploadedLogoUrl; // Utiliser le nouveau logo
+      setSelectedLogoFile(null); // Réinitialiser après le téléversement
+    } else if (logoPreview === null && settings.companyLogoUrl !== null) {
+      // Si l'aperçu est null et qu'il y avait un logo, cela signifie que l'utilisateur veut le supprimer
+      // (Bien que nous n'ayons pas de bouton "supprimer", effacer le champ implicitement)
+      // Ou si l'utilisateur a effacé un champ URL (si on gardait cette option)
+      logoUrlToSave = null;
+    }
+
+
+    const settingsToUpdate: Partial<typeof settings> = {
+      ...data,
+      companyLogoUrl: logoUrlToSave,
+    };
+    
+    // Filtrer pour ne garder que les champs modifiés ou les champs à nullifier
+    const actualUpdates: Partial<typeof settings> = {};
+    let hasChanges = false;
+    (Object.keys(settingsToUpdate) as Array<keyof typeof settingsToUpdate>).forEach(key => {
+        if (settingsToUpdate[key] !== settings[key]) {
+            actualUpdates[key] = settingsToUpdate[key];
+            hasChanges = true;
+        }
     });
-
-
-    if (Object.keys(settingsToUpdate).length === 0) {
+    
+    if (!hasChanges && !selectedLogoFile) {
       toast({ title: "Aucune modification", description: "Aucun paramètre n'a été modifié." });
       setIsSubmitting(false);
       return;
     }
     
-    const success = await updateSettings(settingsToUpdate);
+    const success = await updateSettings(actualUpdates);
     setIsSubmitting(false);
+
     if (success) {
       toast({
         title: "Paramètres enregistrés",
         description: "Vos modifications ont été sauvegardées avec succès.",
       });
-      fetchSettings(); 
+      fetchSettings(); // Re-fetch pour confirmer et obtenir la dernière version (surtout si le logo a été téléversé)
     } else {
       toast({
         title: "Erreur",
-        description: `Impossible d'enregistrer les paramètres. ${error || ''}`,
+        description: `Impossible d'enregistrer les paramètres. ${settingsHookError || ''}`,
         variant: "destructive",
       });
     }
@@ -102,7 +139,7 @@ export default function SettingsPage() {
 
   const isLoading = isLoadingSettings || isSubmitting;
 
-  if (isLoadingSettings && !form.formState.isDirty && !settings.companyName) { 
+  if (isLoadingSettings && !form.formState.isDirty && !settings.companyName && !settings.user_id) { 
     return (
       <div className="space-y-6 flex flex-col items-center justify-center min-h-[300px]">
         <Loader2 className="h-12 w-12 animate-spin text-primary" />
@@ -156,20 +193,60 @@ export default function SettingsPage() {
                   </FormItem>
                 )}
               />
-              <FormField
-                control={form.control}
-                name="companyLogoUrl"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>URL du Logo de l'entreprise</FormLabel>
-                    <FormControl>
-                      <Input type="url" placeholder="https://exemple.com/logo.png" {...field} value={field.value ?? ""} disabled={isLoading} />
-                    </FormControl>
-                    <FormDescription>Collez l'URL d'un logo hébergé en ligne.</FormDescription>
-                    <FormMessage />
-                  </FormItem>
+              
+              <FormItem>
+                <FormLabel>Logo de l'entreprise</FormLabel>
+                <FormControl>
+                  <div className="flex items-center gap-4">
+                    <Input 
+                      type="file" 
+                      accept="image/png, image/jpeg, image/gif, image/webp" 
+                      ref={fileInputRef}
+                      onChange={handleFileChange} 
+                      className="block w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-primary/10 file:text-primary hover:file:bg-primary/20 disabled:opacity-50 disabled:cursor-not-allowed"
+                      disabled={isLoading}
+                    />
+                    {/* Optionnel: un bouton pour réinitialiser la sélection de fichier si besoin */}
+                    {selectedLogoFile && (
+                        <Button type="button" variant="ghost" size="sm" onClick={() => {
+                            setSelectedLogoFile(null);
+                            setLogoPreview(settings.companyLogoUrl); // Revenir à l'aperçu du logo enregistré
+                            if (fileInputRef.current) fileInputRef.current.value = ""; // Réinitialiser l'input file
+                        }} disabled={isLoading}>
+                            Annuler sélection
+                        </Button>
+                    )}
+                  </div>
+                </FormControl>
+                {logoPreview && (
+                  <div className="mt-4">
+                    <FormLabel>Aperçu du logo :</FormLabel>
+                    <div className="mt-2 border rounded-md p-2 inline-block bg-muted/30">
+                      <Image 
+                        src={logoPreview} 
+                        alt="Aperçu du logo" 
+                        width={150} 
+                        height={75} 
+                        className="object-contain max-h-[75px]"
+                        onError={() => {
+                          // Gérer l'erreur si l'URL est cassée, par exemple en n'affichant rien
+                          // ou un placeholder
+                          setLogoPreview(null); 
+                          // Si on veut aussi supprimer l'URL de settings au cas où elle serait invalide:
+                          // form.setValue("companyLogoUrl", ""); // Ne pas faire cela directement
+                        }}
+                        data-ai-hint="company logo"
+                      />
+                    </div>
+                  </div>
                 )}
-              />
+                 {!logoPreview && !isLoadingSettings && (
+                    <p className="text-xs text-muted-foreground mt-2">Aucun logo configuré.</p>
+                )}
+                <FormDescription>Sélectionnez un fichier image (PNG, JPG, GIF, WEBP).</FormDescription>
+                <FormMessage />
+              </FormItem>
+
               <FormField
                 control={form.control}
                 name="rccm"
