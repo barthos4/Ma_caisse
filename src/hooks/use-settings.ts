@@ -13,6 +13,7 @@ const defaultSettings: AppSettings = {
   companyLogoUrl: null,
   rccm: null,
   niu: null,
+  companyContact: null, // Ajout du contact par défaut
 };
 
 export function useSettings() {
@@ -23,7 +24,7 @@ export function useSettings() {
 
   const fetchSettings = useCallback(async () => {
     if (!user) {
-      setSettings(defaultSettings); // Reset to default if no user
+      setSettings(defaultSettings); 
       setIsLoading(false);
       return;
     }
@@ -36,7 +37,7 @@ export function useSettings() {
         .eq('user_id', user.id)
         .single();
 
-      if (fetchError && fetchError.code !== 'PGRST116') { // PGRST116: no rows found
+      if (fetchError && fetchError.code !== 'PGRST116') { 
         throw fetchError;
       }
       if (data) {
@@ -46,15 +47,15 @@ export function useSettings() {
             companyLogoUrl: data.company_logo_url,
             rccm: data.rccm,
             niu: data.niu,
+            companyContact: data.company_contact, // Mapping du nouveau champ
         });
       } else {
-        // No settings found, use defaults (they might be inserted on first update)
         setSettings(defaultSettings);
       }
     } catch (e: any) {
       console.error("Erreur lors de la lecture des paramètres de l'application:", e);
       setError(e.message || "Erreur de chargement des paramètres.");
-      setSettings(defaultSettings); // Fallback
+      setSettings(defaultSettings); 
     } finally {
       setIsLoading(false);
     }
@@ -69,37 +70,42 @@ export function useSettings() {
       setError("Utilisateur non authentifié.");
       return false;
     }
-    setIsLoading(true); // Indicate saving
+    setIsLoading(true); 
     setError(null);
     try {
-      const settingsToUpsert: TablesInsert<'app_settings'> = { // Use Insert type for upsert
-        user_id: user.id, 
-        company_name: newSettings.companyName !== undefined ? newSettings.companyName : settings.companyName,
-        company_address: newSettings.companyAddress !== undefined ? newSettings.companyAddress : settings.companyAddress,
-        company_logo_url: newSettings.companyLogoUrl !== undefined ? newSettings.companyLogoUrl : settings.companyLogoUrl,
-        rccm: newSettings.rccm !== undefined ? newSettings.rccm : settings.rccm,
-        niu: newSettings.niu !== undefined ? newSettings.niu : settings.niu,
+      const currentDbSettings = await supabase
+        .from('app_settings')
+        .select('*')
+        .eq('user_id', user.id)
+        .single();
+
+      const settingsToUpsert: TablesInsert<'app_settings'> = { 
+        user_id: user.id,
+        company_name: newSettings.companyName !== undefined ? newSettings.companyName : (currentDbSettings.data?.company_name ?? settings.companyName),
+        company_address: newSettings.companyAddress !== undefined ? newSettings.companyAddress : (currentDbSettings.data?.company_address ?? settings.companyAddress),
+        company_logo_url: newSettings.companyLogoUrl !== undefined ? newSettings.companyLogoUrl : (currentDbSettings.data?.company_logo_url ?? settings.companyLogoUrl),
+        rccm: newSettings.rccm !== undefined ? newSettings.rccm : (currentDbSettings.data?.rccm ?? settings.rccm),
+        niu: newSettings.niu !== undefined ? newSettings.niu : (currentDbSettings.data?.niu ?? settings.niu),
+        company_contact: newSettings.companyContact !== undefined ? newSettings.companyContact : (currentDbSettings.data?.company_contact ?? settings.companyContact), // Gestion du nouveau champ
         updated_at: new Date().toISOString(),
       };
       
-      // Ensure we don't try to set undefined values if they were not in newSettings
-      if (newSettings.companyName === undefined) delete (settingsToUpsert as any).company_name;
-      if (newSettings.companyAddress === undefined) delete (settingsToUpsert as any).company_address;
-      if (newSettings.companyLogoUrl === undefined) delete (settingsToUpsert as any).company_logo_url;
-      if (newSettings.rccm === undefined) delete (settingsToUpsert as any).rccm;
-      if (newSettings.niu === undefined) delete (settingsToUpsert as any).niu;
-
-
+      // Clean up undefined fields before upsert to avoid issues if a field was intentionally cleared
+      for (const key in settingsToUpsert) {
+        if (settingsToUpsert[key as keyof typeof settingsToUpsert] === undefined) {
+          delete settingsToUpsert[key as keyof typeof settingsToUpsert];
+        }
+      }
+      
       const { error: upsertError } = await supabase
         .from('app_settings')
         .upsert(settingsToUpsert, { onConflict: 'user_id' });
 
       if (upsertError) throw upsertError;
       
-      // Update local state immediately with potentially merged settings
       setSettings(prev => ({
         ...prev,
-        ...newSettings // Apply only the changes that were passed
+        ...newSettings 
       }));
       setIsLoading(false);
       return true;

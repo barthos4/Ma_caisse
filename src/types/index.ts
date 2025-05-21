@@ -1,3 +1,4 @@
+
 export interface Transaction {
   id: string;
   orderNumber: string; // N° d'ordre
@@ -24,9 +25,10 @@ export interface DatedAmount {
 export interface AppSettings {
   companyName?: string | null;
   companyAddress?: string | null;
-  companyLogoUrl?: string | null; // URL du logo de l'entreprise
-  rccm?: string | null; // Registre du Commerce et du Crédit Mobilier
-  niu?: string | null; // Numéro d'Identification Unique
+  companyLogoUrl?: string | null; 
+  rccm?: string | null; 
+  niu?: string | null; 
+  companyContact?: string | null; // Nouveau champ pour le contact
   // Future settings can be added here
   // dateFormat?: string; 
   // notificationPreferences?: { email?: boolean; inApp?: boolean };

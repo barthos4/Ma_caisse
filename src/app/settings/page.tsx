@@ -21,6 +21,7 @@ const settingsFormSchema = z.object({
   companyLogoUrl: z.string().url("Veuillez entrer une URL valide pour le logo.").optional().nullable().or(z.literal('')),
   rccm: z.string().max(50, "Le RCCM est trop long.").optional().nullable(),
   niu: z.string().max(50, "Le NIU est trop long.").optional().nullable(),
+  companyContact: z.string().max(100, "Le contact est trop long.").optional().nullable(), // Nouveau champ
 });
 
 type SettingsFormValues = z.infer<typeof settingsFormSchema>;
@@ -38,6 +39,7 @@ export default function SettingsPage() {
       companyLogoUrl: "",
       rccm: "",
       niu: "",
+      companyContact: "", // Valeur par défaut pour le nouveau champ
     },
   });
 
@@ -49,6 +51,7 @@ export default function SettingsPage() {
         companyLogoUrl: settings.companyLogoUrl || "",
         rccm: settings.rccm || "",
         niu: settings.niu || "",
+        companyContact: settings.companyContact || "", // Réinitialisation avec le nouveau champ
       });
     }
   }, [settings, isLoadingSettings, form]);
@@ -62,11 +65,17 @@ export default function SettingsPage() {
   async function onSubmit(data: SettingsFormValues) {
     setIsSubmitting(true);
     const settingsToUpdate: Partial<SettingsFormValues> = {};
-    if (data.companyName !== settings.companyName) settingsToUpdate.companyName = data.companyName;
-    if (data.companyAddress !== settings.companyAddress) settingsToUpdate.companyAddress = data.companyAddress;
-    if (data.companyLogoUrl !== settings.companyLogoUrl) settingsToUpdate.companyLogoUrl = data.companyLogoUrl || null;
-    if (data.rccm !== settings.rccm) settingsToUpdate.rccm = data.rccm;
-    if (data.niu !== settings.niu) settingsToUpdate.niu = data.niu;
+    // Only include fields that have actually changed to avoid sending full default object
+    (Object.keys(data) as Array<keyof SettingsFormValues>).forEach(key => {
+      if (data[key] !== settings[key] && (data[key] !== "" || settings[key] !== null)) { // Consider empty string vs null
+         if (key === 'companyLogoUrl' && data[key] === '') {
+            settingsToUpdate[key] = null; // Ensure empty URL is saved as null
+        } else {
+            settingsToUpdate[key] = data[key];
+        }
+      }
+    });
+
 
     if (Object.keys(settingsToUpdate).length === 0) {
       toast({ title: "Aucune modification", description: "Aucun paramètre n'a été modifié." });
@@ -182,6 +191,19 @@ export default function SettingsPage() {
                     <FormLabel>N° NIU (Contribuable)</FormLabel>
                     <FormControl>
                       <Input placeholder="Ex: M012345678901X" {...field} value={field.value ?? ""} disabled={isLoading} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="companyContact"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Contact de l'entreprise</FormLabel>
+                    <FormControl>
+                      <Input placeholder="Ex: +237 6XX XXX XXX / email@exemple.com" {...field} value={field.value ?? ""} disabled={isLoading} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>

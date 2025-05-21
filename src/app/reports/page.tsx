@@ -46,7 +46,7 @@ export default function ReportsPage() {
     categories: allCategories, 
     getCategoryById, 
     isLoadingCategories, 
-    errorCategories: errorCategoriesHook, // Renamed errorCategories
+    errorCategories: errorCategoriesHook, 
     fetchCategories: fetchCategoriesHook 
   } = useCategories();
   const { settings, isLoading: isLoadingSettings, fetchSettings: fetchSettingsHook } = useSettings();
@@ -54,7 +54,6 @@ export default function ReportsPage() {
   const [currentPrintDate, setCurrentPrintDate] = useState("");
 
    useEffect(() => {
-    // Initial data fetch
     fetchTransactions();
     fetchCategoriesHook();
     fetchSettingsHook();
@@ -254,6 +253,7 @@ export default function ReportsPage() {
             await new Promise<void>((resolve, reject) => {
                 reader.onloadend = () => {
                      if (reader.error) {
+                         console.error("Erreur FileReader (Rapports):", reader.error);
                         reject(reader.error);
                         return;
                     }
@@ -262,10 +262,14 @@ export default function ReportsPage() {
                         startY += 20; 
                         resolve();
                     } catch (imgError) {
+                         console.error("Erreur doc.addImage (Rapports):", imgError);
                         reject(imgError);
                     }
                 };
-                reader.onerror = (error) => reject(error);
+                reader.onerror = (error) => {
+                    console.error("Erreur onerror FileReader (Rapports):", error);
+                    reject(error);
+                };
                 reader.readAsDataURL(blob);
             });
         } catch (error) {
@@ -280,14 +284,6 @@ export default function ReportsPage() {
       doc.setFontSize(8);
       doc.text(settings.companyAddress, doc.internal.pageSize.getWidth() / 2, startY, { align: 'center' });
       startY += 5;
-    }
-     if (settings.rccm) {
-      doc.setFontSize(8);
-      doc.text(`RCCM: ${settings.rccm}`, 14, startY);
-    }
-    if (settings.niu) {
-      doc.setFontSize(8);
-      doc.text(`NIU: ${settings.niu}`, doc.internal.pageSize.getWidth() - 14 - (doc.getTextWidth(`NIU: ${settings.niu}`)), startY);
     }
     startY += 5;
 
@@ -315,6 +311,20 @@ export default function ReportsPage() {
         4: { cellWidth: 35 }, 
         5: { cellWidth: 20 }, 
         6: { cellWidth: 30, halign: 'right' as const }, 
+      },
+      didDrawPage: (data: any) => {
+        // Pied de page
+        const pageCount = doc.internal.getNumberOfPages();
+        doc.setFontSize(8);
+        const pageInfo = `Page ${data.pageNumber} sur ${pageCount}`;
+        const footerText = [
+            settings.rccm ? `RCCM: ${settings.rccm}` : '',
+            settings.niu ? `NIU: ${settings.niu}` : '',
+            settings.companyContact ? `Contact: ${settings.companyContact}` : ''
+        ].filter(Boolean).join(' | ');
+        
+        doc.text(footerText, data.settings.margin.left, doc.internal.pageSize.getHeight() - 10);
+        doc.text(pageInfo, doc.internal.pageSize.getWidth() - data.settings.margin.right - doc.getTextWidth(pageInfo), doc.internal.pageSize.getHeight() - 10);
       }
     });
     doc.save("rapport_transactions_A4_paysage.pdf");
@@ -325,9 +335,6 @@ export default function ReportsPage() {
      const headerXlsx: any[][] = [
       [settings.companyName || "GESTION CAISSE"],
       ...(settings.companyAddress ? [[settings.companyAddress]] : []),
-      ...(settings.rccm || settings.niu ? [[
-        (settings.rccm ? `RCCM: ${settings.rccm}` : '') + (settings.rccm && settings.niu ? ' | ' : '') + (settings.niu ? `NIU: ${settings.niu}` : '')
-      ]] : []),
       [reportTitle],
       [`Date d'export: ${currentPrintDate}`],
       [], 
@@ -343,19 +350,33 @@ export default function ReportsPage() {
       'Montant (F CFA)': t.amount
     }));
 
+    const footerXlsx: any[][] = [
+        [],
+        [
+          (settings.rccm ? `RCCM: ${settings.rccm}` : ''),
+          (settings.niu ? `NIU: ${settings.niu}` : ''),
+          (settings.companyContact ? `Contact: ${settings.companyContact}` : '')
+        ].filter(Boolean).join(' | ')
+    ];
+
     const worksheet = XLSX.utils.aoa_to_sheet(headerXlsx);
     XLSX.utils.sheet_add_json(worksheet, worksheetData, {origin: `A${headerXlsx.length + 1}`}); 
+    XLSX.utils.sheet_add_aoa(worksheet, footerXlsx, { origin: -1 });
     
     const colWidths = [ {wch:10}, {wch:12}, {wch:40}, {wch:15}, {wch:25}, {wch:15}, {wch:20} ];
     worksheet['!cols'] = colWidths;
 
     if(!worksheet['!merges']) worksheet['!merges'] = [];
     const maxColIndexXlsx = colWidths.length - 1;
-    headerXlsx.forEach((_, rowIndex) => {
-        if (rowIndex < headerXlsx.length -1) { 
+    headerXlsx.forEach((row, rowIndex) => {
+        if (row.length === 1 && rowIndex < headerXlsx.length -1 ) { 
              worksheet['!merges']?.push({s: {r:rowIndex, c:0}, e: {r:rowIndex, c:maxColIndexXlsx}});
         }
     });
+    const footerRowIndexXlsx = headerXlsx.length + 1 + worksheetData.length + 1;
+     if (footerXlsx[1] && footerXlsx[1].length === 1) {
+        worksheet['!merges']?.push({ s: { r: footerRowIndexXlsx, c: 0 }, e: { r: footerRowIndexXlsx, c: maxColIndexXlsx } });
+     }
     
     const currencyFormat = '#,##0 "F CFA"';
     const firstDataRowXlsx = headerXlsx.length + 2;
@@ -374,18 +395,23 @@ export default function ReportsPage() {
     window.print();
   };
 
-  const printHeader = (
-    <div className="print:block hidden my-4 text-center">
-      {settings.companyLogoUrl && <img src={settings.companyLogoUrl} alt="Logo Entreprise" className="h-16 mx-auto mb-2 object-contain" data-ai-hint="company logo"/>}
-      <h1 className="text-xl font-bold text-primary print:text-black">{settings.companyName || "GESTION CAISSE"}</h1>
-      {settings.companyAddress && <p className="text-sm print:text-black">{settings.companyAddress}</p>}
-       <div className="flex justify-between text-xs mt-1 px-2">
-            <span>{settings.rccm ? `RCCM: ${settings.rccm}` : ''}</span>
-            <span>{settings.niu ? `NIU: ${settings.niu}` : ''}</span>
+  const printHeaderFooter = (
+    <>
+      <div className="print:block hidden my-4 text-center">
+        {settings.companyLogoUrl && <img src={settings.companyLogoUrl} alt="Logo Entreprise" className="h-16 mx-auto mb-2 object-contain" data-ai-hint="company logo"/>}
+        <h1 className="text-xl font-bold text-primary print:text-black">{settings.companyName || "GESTION CAISSE"}</h1>
+        {settings.companyAddress && <p className="text-sm print:text-black">{settings.companyAddress}</p>}
+        <h2 className="text-lg font-semibold mt-2 print:text-black">{reportTitle}</h2>
+        {currentPrintDate && <p className="text-xs text-muted-foreground mt-1 print:text-black">Imprimé le: {currentPrintDate}</p>}
       </div>
-      <h2 className="text-lg font-semibold mt-2 print:text-black">{reportTitle}</h2>
-      {currentPrintDate && <p className="text-xs text-muted-foreground mt-1 print:text-black">Imprimé le: {currentPrintDate}</p>}
-    </div>
+      <div className="print:block hidden print-footer-info text-xs text-center mt-4 p-2 border-t">
+        {settings.rccm && <span>RCCM: {settings.rccm}</span>}
+        {settings.niu && <span className="mx-2">|</span>}
+        {settings.niu && <span>NIU: {settings.niu}</span>}
+        {settings.companyContact && <span className="mx-2">|</span>}
+        {settings.companyContact && <span>Contact: {settings.companyContact}</span>}
+      </div>
+    </>
   );
 
   const isLoadingPage = isLoadingTransactions || isLoadingCategories || isLoadingSettings;
@@ -537,7 +563,7 @@ export default function ReportsPage() {
         </Card>
       </div>
 
-      {printHeader}
+      {printHeaderFooter}
 
       <Card className="print:shadow-none print:border-none print:bg-transparent">
         <CardHeader className="print:hidden">
@@ -627,5 +653,3 @@ export default function ReportsPage() {
     </div>
   );
 }
-
-    

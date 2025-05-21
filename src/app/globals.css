@@ -1,3 +1,4 @@
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -139,7 +140,7 @@
 /* Print specific styles */
 @media print {
   @page {
-    size: A4; /* Default to A4, can be overridden by specific page needs if jsPDF sets orientation */
+    size: A4; 
     margin: 15mm; 
   }
 
@@ -232,5 +233,17 @@
     -webkit-appearance: none;
     -moz-appearance: none;
     appearance: none;
+  }
+
+  .print-footer-info {
+    page-break-before: auto; /* Try to avoid break before if possible */
+    page-break-inside: avoid;
+    position: fixed; /* Attempt to fix to bottom */
+    bottom: 10mm; /* Adjust based on your @page margin */
+    left: 15mm;
+    right: 15mm;
+    width: calc(100% - 30mm); /* Page width minus L/R margins */
+    border-top: 1px solid #ccc !important;
+    padding-top: 5px !important;
   }
 }
