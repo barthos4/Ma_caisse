@@ -10,7 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
-import { useAuth } from "@/hooks/use-auth.tsx"; // Updated import path
+import { useAuth } from "@/hooks/use-auth.tsx";
 import Link from "next/link";
 import { Briefcase, Loader2 } from "lucide-react";
 
@@ -97,12 +97,7 @@ export default function LoginPage() {
             </form>
           </Form>
         </CardContent>
-        <CardFooter className="flex-col items-center justify-center text-sm">
-          <p>Vous n'avez pas de compte ?</p>
-          <Button variant="link" asChild className="px-0">
-            <Link href="/signup">Inscrivez-vous ici</Link>
-          </Button>
-        </CardFooter>
+        {/* Le CardFooter avec le lien d'inscription a été retiré */}
       </Card>
     </div>
   );
