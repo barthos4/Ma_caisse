@@ -1,4 +1,3 @@
-
 "use client";
 import { useState, useMemo, useEffect, useCallback } from "react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -60,10 +59,13 @@ export default function EtatsPage() {
   }, []); 
 
   useEffect(() => {
-    if (dateRange?.from && dateRange?.to) { 
+    if (dateRange?.from && dateRange?.to && user) { 
       fetchBudgetsForPeriod(dateRange.from);
     }
-  }, [dateRange, fetchBudgetsForPeriod]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dateRange, fetchBudgetsForPeriod, user]); // Added user dependency
+
+  const { user } = useAuth(); // Ensure user is available for useEffect above
 
   useEffect(() => {
     const newPrevusRecettes: Record<string, number> = {};
@@ -90,7 +92,7 @@ export default function EtatsPage() {
 
 
   useEffect(() => {
-    setCurrentPrintDate(format(new Date(), 'dd/MM/yyyy', { locale: fr }));
+    setCurrentPrintDate(format(new Date(), 'dd/MM/yyyy HH:mm', { locale: fr }));
   }, []);
 
 
@@ -120,12 +122,19 @@ export default function EtatsPage() {
 
   const handleSaveBudget = async (categoryId: string, type: 'income' | 'expense') => {
     const amount = type === 'income' ? prevusRecettes[categoryId] : prevusDepenses[categoryId];
-    const numericAmount = Number(amount) || 0;
+    const numericAmount = Number(amount); // Allow 0, but check for NaN
+
+    if (isNaN(numericAmount)) {
+        toast({ title: "Erreur", description: "Le montant prévu est invalide.", variant: "destructive"});
+        return;
+    }
 
     if (dateRange?.from) {
       const result = await upsertBudget(categoryId, dateRange.from, numericAmount, type);
       if (!result) {
         toast({ title: "Erreur", description: `Impossible d'enregistrer le budget. ${budgetError || ''}`, variant: "destructive"});
+      } else {
+        toast({ title: "Succès", description: "Budget enregistré.", duration: 2000});
       }
     } else {
       toast({ title: "Erreur", description: "Veuillez sélectionner une période valide pour enregistrer le budget.", variant: "destructive"});
@@ -168,47 +177,81 @@ export default function EtatsPage() {
   const soldeRealise = totalRecettesRealisees - totalDepensesRealisees;
 
   const etatTitle = useMemo(() => {
-    let title = "Etat de la Caisse";
+    let title = "ETAT DE LA CAISSE";
     const fromDate = dateRange?.from ? format(dateRange.from, 'dd/MM/yyyy', { locale: fr }) : null;
     const toDate = dateRange?.to ? format(dateRange.to, 'dd/MM/yyyy', { locale: fr }) : null;
 
     if (fromDate && toDate) {
       if (isSameDay(dateRange!.from!, dateRange!.to!)) {
-        title += ` du ${fromDate}`;
+        title += ` DU ${fromDate}`;
       } else {
-        title += ` du ${fromDate} au ${toDate}`;
+        title += ` DU ${fromDate} AU ${toDate}`;
       }
     }
-    return title;
+    return title.toUpperCase();
   }, [dateRange]);
 
+  const formatForPdf = (value: number) => {
+    return formatCurrencyCFA(value).replace(/\u00A0/g, ' ').replace(/\s/g, ' ');
+  };
+
   const exportToPDF = async () => {
-    if (isLoadingSettings || !settings) return;
+    if (isLoadingSettings || !settings) {
+        toast({ title: "Chargement", description: "Les paramètres de l'entreprise ne sont pas encore chargés.", variant: "default"});
+        return;
+    }
     const doc = new jsPDF({ orientation: 'p', unit: 'mm', format: 'a4' }); 
     const tableCellStyles = { fontSize: 8, cellPadding: 1.5 };
     const tableHeaderStyles = { fillColor: [220, 220, 220], textColor: [0,0,0], fontStyle: 'bold' as const, fontSize: 8, halign: 'center' as const };
-    
-    let startY = 10;
-     if (settings.companyLogoUrl) {
+    const pageMargin = 14; // Left and right margin
+
+    let logoStartY = 10;
+    let headerTextStartY = logoStartY;
+    const logoMaxHeight = 15;
+    const logoMaxWidth = 40; // Increased width for logo
+    let actualLogoWidth = 0;
+
+    if (settings.companyLogoUrl) {
         try {
             const response = await fetch(settings.companyLogoUrl);
             if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
             const blob = await response.blob();
-            const reader = new FileReader();
+            
             await new Promise<void>((resolve, reject) => {
+                const reader = new FileReader();
                 reader.onloadend = () => {
-                     if (reader.error) {
+                    if (reader.error) {
                         console.error("Erreur FileReader (Etats):", reader.error);
                         reject(reader.error);
                         return;
                     }
                     try {
-                        doc.addImage(reader.result as string, 'PNG', 14, startY, 30, 15); 
-                        startY += 20; 
-                        resolve();
+                        const img = new Image();
+                        img.onload = () => {
+                            let w = img.width;
+                            let h = img.height;
+                            const ratio = w / h;
+
+                            if (w > logoMaxWidth) {
+                                w = logoMaxWidth;
+                                h = w / ratio;
+                            }
+                            if (h > logoMaxHeight) {
+                                h = logoMaxHeight;
+                                w = h * ratio;
+                            }
+                            actualLogoWidth = w;
+                            doc.addImage(reader.result as string, 'PNG', pageMargin, logoStartY, w, h);
+                            resolve();
+                        };
+                        img.onerror = (imgError) => {
+                             console.error("Erreur de chargement de l'image du logo (Etats):", imgError);
+                             reject(imgError);
+                        }
+                        img.src = reader.result as string;
                     } catch (imgError) {
                          console.error("Erreur doc.addImage (Etats):", imgError);
-                        reject(imgError);
+                         reject(imgError);
                     }
                 };
                 reader.onerror = (error) => {
@@ -219,175 +262,206 @@ export default function EtatsPage() {
             });
         } catch (error) {
             console.error("Erreur de chargement du logo pour PDF (Etats):", error);
+            // PDF will be generated without logo if fetch fails
         }
     }
+    
+    const headerTextX = pageMargin + (actualLogoWidth > 0 ? actualLogoWidth + 5 : 0); // X position for text next to logo
+    const headerTextWidth = doc.internal.pageSize.getWidth() - headerTextX - pageMargin;
+
 
     doc.setFontSize(14);
-    doc.text(settings.companyName || "GESTION CAISSE", doc.internal.pageSize.getWidth() / 2, startY, { align: 'center' });
-    startY += 5;
+    doc.setFont("helvetica", "bold");
+    doc.text(settings.companyName || "GESTION CAISSE", headerTextX, headerTextStartY + 5, { align: 'left', maxWidth: headerTextWidth });
+    headerTextStartY += 7;
+    
     if (settings.companyAddress) {
       doc.setFontSize(8);
-      doc.text(settings.companyAddress, doc.internal.pageSize.getWidth() / 2, startY, { align: 'center' });
-      startY += 5;
+      doc.setFont("helvetica", "normal");
+      doc.text(settings.companyAddress, headerTextX, headerTextStartY, { align: 'left', maxWidth: headerTextWidth });
+      headerTextStartY += 4;
     }
-    startY += 5; 
+     if (settings.companyContact) {
+      doc.setFontSize(8);
+      doc.setFont("helvetica", "normal");
+      doc.text(`Contact: ${settings.companyContact}`, headerTextX, headerTextStartY, { align: 'left', maxWidth: headerTextWidth });
+      headerTextStartY +=4;
+    }
+
+    // Ensure startY for main content is below the tallest element of the header (logo or text block)
+    let mainContentStartY = Math.max(logoStartY + logoMaxHeight + 5, headerTextStartY + 5);
 
 
     doc.setFontSize(12);
-    doc.text(etatTitle, doc.internal.pageSize.getWidth() / 2, startY, { align: 'center' });
-    startY += 5;
+    doc.setFont("helvetica", "bold");
+    doc.text(etatTitle, doc.internal.pageSize.getWidth() / 2, mainContentStartY, { align: 'center' });
+    mainContentStartY += 7;
     doc.setFontSize(9);
-    doc.text(`Date d'export: ${currentPrintDate}`, doc.internal.pageSize.getWidth() / 2, startY, { align: 'center' });
-    startY += 7;
+    doc.setFont("helvetica", "normal");
+    doc.text(`Date d'export: ${currentPrintDate}`, doc.internal.pageSize.getWidth() / 2, mainContentStartY, { align: 'center' });
+    mainContentStartY += 7;
 
     doc.setFontSize(10);
-    doc.text("I- Les Recettes", 14, startY);
-    startY += 5;
+    doc.setFont("helvetica", "bold");
+    doc.text("I- LES RECETTES", pageMargin, mainContentStartY);
+    mainContentStartY += 5;
     (doc as any).autoTable({
       head: [['N°', 'Types de recettes', 'Montant Prévu', 'Montant Réalisé', '% Réal.', 'Ecart']],
       body: recettesData.map(r => [
         r.numero, 
         r.type, 
-        formatCurrencyCFA(r.montantPrevu).replace(/\u00A0/g, ' '), 
-        formatCurrencyCFA(r.montantRealise).replace(/\u00A0/g, ' '), 
+        formatForPdf(r.montantPrevu), 
+        formatForPdf(r.montantRealise), 
         `${r.pourcentageRealisation.toFixed(0)}%`, 
-        formatCurrencyCFA(r.ecart).replace(/\u00A0/g, ' ')
+        formatForPdf(r.ecart)
       ]),
-      startY: startY,
+      startY: mainContentStartY,
       theme: 'grid',
       headStyles: tableHeaderStyles,
       styles: tableCellStyles,
       columnStyles: { 
         0: { cellWidth: 10, halign: 'center' as const },
-        1: { cellWidth: 50 },
-        2: { cellWidth: 35, halign: 'right' as const },
-        3: { cellWidth: 35, halign: 'right' as const },
-        4: { cellWidth: 20, halign: 'right' as const },
-        5: { cellWidth: 30, halign: 'right' as const }
-      }
+        1: { cellWidth: 55 }, // Increased width
+        2: { cellWidth: 40, halign: 'right' as const }, // Increased width
+        3: { cellWidth: 40, halign: 'right' as const }, // Increased width
+        4: { cellWidth: 15, halign: 'right' as const },
+        5: { cellWidth: 25, halign: 'right' as const } // Increased width
+      },
+      margin: { left: pageMargin, right: pageMargin }
     });
-    startY = (doc as any).lastAutoTable.finalY + 2;
+    mainContentStartY = (doc as any).lastAutoTable.finalY + 2;
     (doc as any).autoTable({
       body: [[
         {content: 'Total Recettes', colSpan: 2, styles: {fontStyle: 'bold' as const, halign: 'left' as const}}, 
-        {content: formatCurrencyCFA(totalRecettesPrevus).replace(/\u00A0/g, ' '), styles: {fontStyle: 'bold' as const, halign: 'right' as const}},
-        {content: formatCurrencyCFA(totalRecettesRealisees).replace(/\u00A0/g, ' '), styles: {fontStyle: 'bold' as const, halign: 'right' as const}},
+        {content: formatForPdf(totalRecettesPrevus), styles: {fontStyle: 'bold' as const, halign: 'right' as const}},
+        {content: formatForPdf(totalRecettesRealisees), styles: {fontStyle: 'bold' as const, halign: 'right' as const}},
         {content: '', styles: {}}, 
         {content: '', styles: {}}  
       ]],
-      startY: startY,
+      startY: mainContentStartY,
       theme: 'grid',
       styles: {...tableCellStyles, fontStyle: 'bold' as const},
       columnStyles: { 
-        0: { cellWidth: 60 }, 
-        1: { cellWidth: 35 },
-        2: { cellWidth: 35 },
-        3: { cellWidth: 20 },
-        4: { cellWidth: 30 }
+        0: { cellWidth: 65 }, // N° + Types
+        1: { cellWidth: 40 }, // Prévu
+        2: { cellWidth: 40 }, // Réalisé
+        3: { cellWidth: 15 }, // %
+        4: { cellWidth: 25 }  // Ecart
       },
       didParseCell: function (data: any) { 
         if (data.row.index === 0 && data.cell.raw.content === 'Total Recettes') {
              data.cell.colSpan = 2;
         }
-      }
+      },
+      margin: { left: pageMargin, right: pageMargin }
     });
-    startY = (doc as any).lastAutoTable.finalY + 8;
+    mainContentStartY = (doc as any).lastAutoTable.finalY + 8;
 
     doc.setFontSize(10);
-    doc.text("II- Les Dépenses", 14, startY);
-    startY += 5;
+    doc.setFont("helvetica", "bold");
+    doc.text("II- LES DEPENSES", pageMargin, mainContentStartY);
+    mainContentStartY += 5;
     (doc as any).autoTable({
       head: [['N°', 'Types de dépenses', 'Montant Prévu', 'Montant Réalisé', '% Réal.', 'Ecart']],
       body: depensesData.map(d => [
         d.numero, 
         d.type, 
-        formatCurrencyCFA(d.montantPrevu).replace(/\u00A0/g, ' '), 
-        formatCurrencyCFA(d.montantRealise).replace(/\u00A0/g, ' '), 
+        formatForPdf(d.montantPrevu), 
+        formatForPdf(d.montantRealise), 
         `${d.pourcentageRealisation.toFixed(0)}%`, 
-        formatCurrencyCFA(d.ecart).replace(/\u00A0/g, ' ')
+        formatForPdf(d.ecart)
       ]),
-      startY: startY,
+      startY: mainContentStartY,
       theme: 'grid',
       headStyles: tableHeaderStyles,
       styles: tableCellStyles,
       columnStyles: { 
         0: { cellWidth: 10, halign: 'center' as const },
-        1: { cellWidth: 50 },
-        2: { cellWidth: 35, halign: 'right' as const },
-        3: { cellWidth: 35, halign: 'right' as const },
-        4: { cellWidth: 20, halign: 'right' as const },
-        5: { cellWidth: 30, halign: 'right' as const }
-      }
+        1: { cellWidth: 55 }, // Increased
+        2: { cellWidth: 40, halign: 'right' as const }, // Increased
+        3: { cellWidth: 40, halign: 'right' as const }, // Increased
+        4: { cellWidth: 15, halign: 'right' as const },
+        5: { cellWidth: 25, halign: 'right' as const }  // Increased
+      },
+      margin: { left: pageMargin, right: pageMargin }
     });
-    startY = (doc as any).lastAutoTable.finalY + 2;
+    mainContentStartY = (doc as any).lastAutoTable.finalY + 2;
     (doc as any).autoTable({
       body: [[
         {content: 'Total Dépenses', colSpan: 2, styles: {fontStyle: 'bold' as const, halign: 'left' as const}}, 
-        {content: formatCurrencyCFA(totalDepensesPrevus).replace(/\u00A0/g, ' '), styles: {fontStyle: 'bold' as const, halign: 'right' as const}},
-        {content: formatCurrencyCFA(totalDepensesRealisees).replace(/\u00A0/g, ' '), styles: {fontStyle: 'bold' as const, halign: 'right' as const}},
+        {content: formatForPdf(totalDepensesPrevus), styles: {fontStyle: 'bold' as const, halign: 'right' as const}},
+        {content: formatForPdf(totalDepensesRealisees), styles: {fontStyle: 'bold' as const, halign: 'right' as const}},
         {content: '', styles: {}}, 
         {content: '', styles: {}}  
       ]],
-      startY: startY,
+      startY: mainContentStartY,
       theme: 'grid',
       styles: {...tableCellStyles, fontStyle: 'bold' as const},
        columnStyles: { 
-        0: { cellWidth: 60 },
-        1: { cellWidth: 35 },
-        2: { cellWidth: 35 },
-        3: { cellWidth: 20 },
-        4: { cellWidth: 30 }
+        0: { cellWidth: 65 },
+        1: { cellWidth: 40 },
+        2: { cellWidth: 40 },
+        3: { cellWidth: 15 },
+        4: { cellWidth: 25 }
       },
       didParseCell: function (data: any) {
         if (data.row.index === 0 && data.cell.raw.content === 'Total Dépenses') {
              data.cell.colSpan = 2;
         }
-      }
+      },
+      margin: { left: pageMargin, right: pageMargin }
     });
-    startY = (doc as any).lastAutoTable.finalY + 8;
+    mainContentStartY = (doc as any).lastAutoTable.finalY + 10; // Increased space
     
     doc.setFontSize(10);
-    const balanceSectionWidth = doc.internal.pageSize.getWidth() - 28; 
+    const availableWidthForBalance = doc.internal.pageSize.getWidth() - (2 * pageMargin);
     (doc as any).autoTable({
         body: [
             [
-             { content: 'BALANCE', styles: { fontStyle: 'bold' as const, halign: 'left' as const, cellWidth: balanceSectionWidth * 0.25 } }, 
-             { content: `Total Recettes: ${formatCurrencyCFA(totalRecettesRealisees).replace(/\u00A0/g, ' ')}`, styles: {halign: 'right' as const, cellWidth: balanceSectionWidth * 0.25} }, 
-             { content: `Total Dépenses: ${formatCurrencyCFA(totalDepensesRealisees).replace(/\u00A0/g, ' ')}`, styles: {halign: 'right' as const, cellWidth: balanceSectionWidth * 0.25} }, 
-             { content: `Solde: ${formatCurrencyCFA(soldeRealise).replace(/\u00A0/g, ' ')}`, styles: { fontStyle: 'bold' as const, halign: 'right' as const, cellWidth: balanceSectionWidth * 0.25} }, 
+             { content: 'BALANCE', styles: { fontStyle: 'bold' as const, halign: 'left' as const, cellWidth: availableWidthForBalance * 0.25 } }, 
+             { content: `Recettes: ${formatForPdf(totalRecettesRealisees)}`, styles: {halign: 'right' as const, cellWidth: availableWidthForBalance * 0.25} }, 
+             { content: `Dépenses: ${formatForPdf(totalDepensesRealisees)}`, styles: {halign: 'right' as const, cellWidth: availableWidthForBalance * 0.25} }, 
+             { content: `Solde: ${formatForPdf(soldeRealise)}`, styles: { fontStyle: 'bold' as const, halign: 'right' as const, cellWidth: availableWidthForBalance * 0.25} }, 
             ]
         ],
-        startY: startY,
+        startY: mainContentStartY,
         theme: 'plain', 
-        styles: {...tableCellStyles, fontStyle: 'bold' as const},
+        styles: {...tableCellStyles, fontStyle: 'bold' as const, cellPadding: 2 }, // Added cellPadding
         tableWidth: 'auto',
+        margin: { left: pageMargin, right: pageMargin },
         didDrawPage: (data: any) => {
-            // Pied de page (identique à celui du journal)
             const pageCount = doc.internal.getNumberOfPages();
             doc.setFontSize(8);
+            doc.setFont("helvetica", "normal");
             const pageInfo = `Page ${data.pageNumber} sur ${pageCount}`;
-            const footerText = [
+            const footerTextParts = [
                 settings.rccm ? `RCCM: ${settings.rccm}` : '',
                 settings.niu ? `NIU: ${settings.niu}` : '',
-                settings.companyContact ? `Contact: ${settings.companyContact}` : ''
-            ].filter(Boolean).join(' | ');
+            ].filter(Boolean);
             
-            doc.text(footerText, data.settings.margin.left, doc.internal.pageSize.getHeight() - 10);
-            doc.text(pageInfo, doc.internal.pageSize.getWidth() - data.settings.margin.right - doc.getTextWidth(pageInfo), doc.internal.pageSize.getHeight() - 10);
+            doc.text(footerTextParts.join(' | '), pageMargin, doc.internal.pageSize.getHeight() - 10);
+            if (settings.companyContact) {
+                 doc.text(`Contact: ${settings.companyContact}`, pageMargin, doc.internal.pageSize.getHeight() - 6);
+            }
+            doc.text(pageInfo, doc.internal.pageSize.getWidth() - pageMargin - doc.getTextWidth(pageInfo), doc.internal.pageSize.getHeight() - 10);
         }
     });
 
-    doc.save(`etat_de_caisse_A4_portrait.pdf`);
+    doc.save(`etat_de_caisse_${format(new Date(), 'yyyyMMddHHmm')}.pdf`);
   };
 
   const exportToXLSX = () => {
-    if (isLoadingSettings || !settings) return;
+    if (isLoadingSettings || !settings) {
+        toast({ title: "Chargement", description: "Les paramètres de l'entreprise ne sont pas encore chargés.", variant: "default"});
+        return;
+    }
     const wb = XLSX.utils.book_new();
     
     const headerXlsx: any[][] = [ 
       [settings.companyName || "GESTION CAISSE"],
       ...(settings.companyAddress ? [[settings.companyAddress]] : []),
-      [etatTitle],
+      ...(settings.companyContact ? [[`Contact: ${settings.companyContact}`]] : []),
+      [etatTitle.toUpperCase()],
       [`Date d'export: ${currentPrintDate}`],
       [], 
     ];
@@ -433,17 +507,16 @@ export default function EtatsPage() {
         [
           (settings.rccm ? `RCCM: ${settings.rccm}` : ''),
           (settings.niu ? `NIU: ${settings.niu}` : ''),
-          (settings.companyContact ? `Contact: ${settings.companyContact}` : '')
         ].filter(Boolean).join(' | ')
     ];
 
     const ws = XLSX.utils.aoa_to_sheet(headerXlsx); 
     const recettesStartRow = headerXlsx.length + 1;
-    XLSX.utils.sheet_add_aoa(ws, [["I- Les Recettes"]], {origin: `A${recettesStartRow}`});
+    XLSX.utils.sheet_add_aoa(ws, [["I- LES RECETTES"]], {origin: `A${recettesStartRow}`});
     XLSX.utils.sheet_add_json(ws, wsDataRecettes, {origin: `A${recettesStartRow + 1}`, skipHeader: false});
     
     const depensesStartRow = recettesStartRow + 1 + wsDataRecettes.length + 1;
-    XLSX.utils.sheet_add_aoa(ws, [["II- Les Dépenses"]], {origin: {r: depensesStartRow -1 , c: 0}}); 
+    XLSX.utils.sheet_add_aoa(ws, [["II- LES DEPENSES"]], {origin: {r: depensesStartRow -1 , c: 0}}); 
     XLSX.utils.sheet_add_json(ws, wsDataDepenses, {origin: {r: depensesStartRow, c: 0}, skipHeader: false}); 
     
     const summaryStartRow = depensesStartRow + wsDataDepenses.length + 1;
@@ -451,7 +524,7 @@ export default function EtatsPage() {
     XLSX.utils.sheet_add_aoa(ws, footerXlsx, { origin: -1 });
 
 
-    ws['!cols'] = [{wch:5}, {wch:30}, {wch:15}, {wch:15}, {wch:10}, {wch:15}];
+    ws['!cols'] = [{wch:5}, {wch:35}, {wch:18}, {wch:18}, {wch:10}, {wch:18}]; // Adjusted widths
     
     const currencyFormat = '#,##0 "F CFA"';
     const percentageFormat = '0%';
@@ -492,24 +565,27 @@ export default function EtatsPage() {
      }
     
     XLSX.utils.book_append_sheet(wb, ws, "Etat de Caisse");
-    XLSX.writeFile(wb, "etat_de_caisse.xlsx");
+    XLSX.writeFile(wb, `etat_de_caisse_${format(new Date(), 'yyyyMMddHHmm')}.xlsx`);
   };
 
   const handlePrint = () => {
-    if (isLoadingSettings || !settings) return;
+    if (isLoadingSettings || !settings) {
+        toast({ title: "Chargement", description: "Les paramètres de l'entreprise ne sont pas encore chargés.", variant: "default"});
+        return;
+    }
     window.print();
   };
 
   const renderTableSection = (title: string, data: EtatRow[], type: 'income' | 'expense', totalPrevus: number, totalRealises: number) => (
     <Card className="print:shadow-none print:border-none print:bg-transparent">
       <CardHeader className="print:py-2">
-        <CardTitle className="text-xl print:text-lg">{title}</CardTitle>
+        <CardTitle className="text-xl print:text-lg print:text-black">{title.toUpperCase()}</CardTitle>
       </CardHeader>
       <CardContent className="print:p-0">
         <Table>
           <TableHeader>
             <TableRow className="print:border-b print:border-gray-400">
-              <TableHead className="w-12 print:text-black">N°</TableHead><TableHead className="print:text-black">{type === 'income' ? 'Types de recettes' : 'Types de dépenses'}</TableHead><TableHead className="text-right print:text-black">Montant Prévu</TableHead><TableHead className="text-right print:text-black">Montant Réalisé</TableHead><TableHead className="text-right print:text-black">Progression</TableHead><TableHead className="text-right print:text-black">% Réal.</TableHead><TableHead className="text-right print:text-black">Ecart</TableHead>
+              <TableHead className="w-12 print:text-black">N°</TableHead><TableHead className="print:text-black">{type === 'income' ? 'TYPES DE RECETTES' : 'TYPES DE DEPENSES'}</TableHead><TableHead className="text-right print:text-black">MONTANT PREVU</TableHead><TableHead className="text-right print:text-black">MONTANT REALISE</TableHead><TableHead className="text-right print:text-black">PROGRESSION</TableHead><TableHead className="text-right print:text-black">% REAL.</TableHead><TableHead className="text-right print:text-black">ECART</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -530,9 +606,9 @@ export default function EtatsPage() {
                     value={(type === 'income' ? prevusRecettes[row.id] : prevusDepenses[row.id]) ?? ''}
                     onChange={(e) => handlePrevuChange(row.id, e.target.value, type)}
                     onBlur={() => handleSaveBudget(row.id, type)}
-                    className="w-32 text-right print:border-none print:bg-transparent print:p-0"
+                    className="w-32 text-right print:border-none print:bg-transparent print:p-0 print:input-as-text"
                     placeholder="0"
-                    disabled={isLoadingBudgets} 
+                    disabled={isLoadingBudgets || isLoadingSettings} 
                   />
                 </TableCell>
                 <TableCell className="text-right print:text-black">{formatCurrencyCFA(row.montantRealise)}</TableCell>
@@ -553,7 +629,7 @@ export default function EtatsPage() {
               </TableRow>
             ))}
             <TableRow className="bg-muted/50 font-bold print:border-t-2 print:border-b-2 print:border-gray-500">
-              <TableCell colSpan={2} className="print:text-black">{type === 'income' ? 'Total Recettes' : 'Total Dépenses'}</TableCell>
+              <TableCell colSpan={2} className="print:text-black">{type === 'income' ? 'TOTAL RECETTES' : 'TOTAL DEPENSES'}</TableCell>
               <TableCell className="text-right print:text-black">{formatCurrencyCFA(totalPrevus)}</TableCell>
               <TableCell className="text-right print:text-black">{formatCurrencyCFA(totalRealises)}</TableCell>
               <TableCell colSpan={3}></TableCell>
@@ -564,23 +640,39 @@ export default function EtatsPage() {
     </Card>
   );
 
-  const printHeaderFooter = (
-     <>
-      <div className="print:block hidden my-4 text-center">
-        {settings.companyLogoUrl && <img src={settings.companyLogoUrl} alt="Logo Entreprise" className="h-16 mx-auto mb-2 object-contain" data-ai-hint="company logo"/>}
-        <h1 className="text-xl font-bold text-primary print:text-black">{settings.companyName || "GESTION CAISSE"}</h1>
-        {settings.companyAddress && <p className="text-sm print:text-black">{settings.companyAddress}</p>}
-        <h2 className="text-lg font-semibold mt-2 print:text-black">{etatTitle}</h2>
+  const printHeader = (
+     <div className="print:block hidden my-4 text-center">
+        {settings.companyLogoUrl && (
+          <div className="flex justify-start items-start mb-2">
+            <img 
+              src={settings.companyLogoUrl} 
+              alt="Logo Entreprise" 
+              className="h-16 w-auto max-w-[150px] object-contain mr-4" 
+              data-ai-hint="company logo"
+            />
+            <div className="text-left">
+              <h1 className="text-xl font-bold text-primary print:text-black">{settings.companyName || "GESTION CAISSE"}</h1>
+              {settings.companyAddress && <p className="text-sm print:text-black">{settings.companyAddress}</p>}
+            </div>
+          </div>
+        )}
+        {!settings.companyLogoUrl && (
+          <>
+            <h1 className="text-xl font-bold text-primary print:text-black">{settings.companyName || "GESTION CAISSE"}</h1>
+            {settings.companyAddress && <p className="text-sm print:text-black">{settings.companyAddress}</p>}
+          </>
+        )}
+        <h2 className="text-lg font-semibold mt-4 print:text-black">{etatTitle}</h2>
         {currentPrintDate && <p className="text-xs text-muted-foreground mt-1 print:text-black">Imprimé le: {currentPrintDate}</p>}
       </div>
+  );
+
+  const printFooter = (
       <div className="print:block hidden print-footer-info text-xs text-center mt-4 p-2 border-t">
-        {settings.rccm && <span>RCCM: {settings.rccm}</span>}
-        {settings.niu && <span className="mx-2">|</span>}
-        {settings.niu && <span>NIU: {settings.niu}</span>}
-        {settings.companyContact && <span className="mx-2">|</span>}
-        {settings.companyContact && <span>Contact: {settings.companyContact}</span>}
+        <span className="mr-2">{settings.rccm ? `RCCM: ${settings.rccm}` : ''}</span>
+        <span className="mr-2">{settings.niu ? `NIU: ${settings.niu}` : ''}</span>
+        <span>{settings.companyContact ? `Contact: ${settings.companyContact}` : ''}</span>
       </div>
-    </>
   );
 
   const isLoadingPage = isLoadingCategories || isLoadingTransactions || isLoadingSettings || isLoadingBudgets;
@@ -605,7 +697,7 @@ export default function EtatsPage() {
 
   return (
     <div className="space-y-6 print:space-y-2">
-      {printHeaderFooter}
+      {printHeader}
 
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 print:hidden">
         <div>
@@ -677,17 +769,17 @@ export default function EtatsPage() {
 
       <Card className="mt-6 print:shadow-none print:border-2 print:border-black print:mt-4">
         <CardHeader className="print:py-2">
-          <CardTitle className="text-xl print:text-lg text-center font-bold">BALANCE</CardTitle>
+          <CardTitle className="text-xl print:text-lg text-center font-bold print:text-black">BALANCE</CardTitle>
         </CardHeader>
         <CardContent className="print:p-1">
           <Table className="print:border-collapse">
             <TableBody>
               <TableRow className="print:border-none">
-                <TableCell className="font-semibold print:text-black print:border print:border-gray-400">Total Recettes Réalisées</TableCell>
+                <TableCell className="font-semibold print:text-black print:border print:border-gray-400">TOTAL RECETTES REALISEES</TableCell>
                 <TableCell className="text-right print:text-black print:border print:border-gray-400">{formatCurrencyCFA(totalRecettesRealisees)}</TableCell>
               </TableRow>
               <TableRow className="print:border-none">
-                <TableCell className="font-semibold print:text-black print:border print:border-gray-400">Total Dépenses Réalisées</TableCell>
+                <TableCell className="font-semibold print:text-black print:border print:border-gray-400">TOTAL DEPENSES REALISEES</TableCell>
                 <TableCell className="text-right print:text-black print:border print:border-gray-400">{formatCurrencyCFA(totalDepensesRealisees)}</TableCell>
               </TableRow>
               <TableRow className="font-bold text-lg bg-muted/30 print:border-2 print:border-black print:bg-gray-200">
@@ -700,6 +792,7 @@ export default function EtatsPage() {
           </Table>
         </CardContent>
       </Card>
+      {printFooter}
     </div>
   );
 }

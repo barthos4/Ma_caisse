@@ -1,4 +1,3 @@
-
 "use client";
 import { useState, useMemo, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -30,6 +29,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { useSettings } from "@/hooks/use-settings"; 
+import { useToast } from "@/hooks/use-toast"; // Added useToast import
 
 import jsPDF from 'jspdf';
 import 'jspdf-autotable';
@@ -50,6 +50,7 @@ export default function ReportsPage() {
     fetchCategories: fetchCategoriesHook 
   } = useCategories();
   const { settings, isLoading: isLoadingSettings, fetchSettings: fetchSettingsHook } = useSettings();
+  const { toast } = useToast(); // Initialize useToast
   
   const [currentPrintDate, setCurrentPrintDate] = useState("");
 
@@ -61,7 +62,7 @@ export default function ReportsPage() {
   }, []);
 
   useEffect(() => {
-    setCurrentPrintDate(format(new Date(), 'dd/MM/yyyy', { locale: fr }));
+    setCurrentPrintDate(format(new Date(), 'dd/MM/yyyy HH:mm', { locale: fr }));
   }, []);
 
   const [dateRange, setDateRange] = useState<DateRange | undefined>({
@@ -108,7 +109,7 @@ export default function ReportsPage() {
     filteredTransactions
       .filter(t => t.type === 'expense')
       .forEach(t => {
-        const categoryName = getCategoryById(t.categoryId)?.name || 'Non classé';
+        const categoryName = getCategoryById(t.categoryId!)?.name || 'Non classé';
         categoryMap[categoryName] = (categoryMap[categoryName] || 0) + t.amount;
       });
     for (const [name, value] of Object.entries(categoryMap)) {
@@ -123,7 +124,7 @@ export default function ReportsPage() {
     filteredTransactions
       .filter(t => t.type === 'income')
       .forEach(t => {
-        const categoryName = getCategoryById(t.categoryId)?.name || 'Non classé';
+        const categoryName = getCategoryById(t.categoryId!)?.name || 'Non classé';
         categoryMap[categoryName] = (categoryMap[categoryName] || 0) + t.amount;
       });
     for (const [name, value] of Object.entries(categoryMap)) {
@@ -152,7 +153,7 @@ export default function ReportsPage() {
       return (
         <div className="bg-background p-2 border rounded shadow-lg text-sm">
           <p className="font-medium">{data?.name || name || label}</p>
-          <p className="text-foreground">{formatCurrencyCFA(value).replace(/\u00A0/g, ' ')}</p>
+          <p className="text-foreground">{formatCurrencyCFA(value).replace(/\u00A0/g, ' ').replace(/\s/g, ' ')}</p>
         </div>
       );
     }
@@ -160,30 +161,30 @@ export default function ReportsPage() {
   };
 
   const reportTitle = useMemo(() => {
-    let title = "Rapport des Transactions";
+    let title = "RAPPORT DES TRANSACTIONS";
     const fromDate = dateRange?.from ? format(dateRange.from, 'dd/MM/yyyy', { locale: fr }) : null;
     const toDate = dateRange?.to ? format(dateRange.to, 'dd/MM/yyyy', { locale: fr }) : null;
 
     if (fromDate && toDate) {
       if (isSameDay(dateRange!.from!, dateRange!.to!)) {
-        title += ` du ${fromDate}`;
+        title += ` DU ${fromDate}`;
       } else {
-        title += ` du ${fromDate} au ${toDate}`;
+        title += ` DU ${fromDate} AU ${toDate}`;
       }
     } else if (fromDate) {
-      title += ` à partir du ${fromDate}`;
+      title += ` A PARTIR DU ${fromDate}`;
     } else if (toDate) {
-      title += ` jusqu'au ${toDate}`;
+      title += ` JUSQU'AU ${toDate}`;
     }
 
     if (selectedCategory !== "all") {
-      const catName = getCategoryById(selectedCategory)?.name || "Catégorie inconnue";
-      title += ` pour ${catName}`;
+      const catName = getCategoryById(selectedCategory!)?.name || "Catégorie inconnue";
+      title += ` POUR ${catName.toUpperCase()}`;
     }
     if (transactionType !== "all") {
-      title += transactionType === "income" ? " (Revenus)" : " (Dépenses)";
+      title += transactionType === "income" ? " (REVENUS)" : " (DEPENSES)";
     }
-    return title;
+    return title.toUpperCase();
   }, [dateRange, selectedCategory, transactionType, getCategoryById]);
 
 
@@ -191,13 +192,20 @@ export default function ReportsPage() {
     return type === 'income' ? 'Revenu' : 'Dépense';
   }
 
+  const formatForPdf = (value: number | string) => {
+    if (typeof value === 'number') {
+      return formatCurrencyCFA(value).replace(/\u00A0/g, ' ').replace(/\s/g, ' ');
+    }
+    return String(value).replace(/\u00A0/g, ' ').replace(/\s/g, ' ');
+  };
+
   const exportDetailedToCSV = () => {
     const headers = ["N° Ordre", "Date", "Description", "Référence", "Catégorie", "Type", "Montant (F CFA)"];
     const rows = filteredTransactions.map(t => {
       const orderNumberCSV = `"${String(t.orderNumber || '').replace(/"/g, '""')}"`;
       const descriptionCSV = `"${String(t.description || '').replace(/"/g, '""')}"`;
       const referenceCSV = `"${String(t.reference || '').replace(/"/g, '""')}"`;
-      const categoryNameCSV = `"${String(getCategoryById(t.categoryId)?.name || 'Non classé(e)').replace(/"/g, '""')}"`;
+      const categoryNameCSV = `"${String(getCategoryById(t.categoryId!)?.name || 'Non classé(e)').replace(/"/g, '""')}"`;
       return [
         orderNumberCSV,
         format(t.date, 'yyyy-MM-dd', { locale: fr }),
@@ -215,7 +223,7 @@ export default function ReportsPage() {
     if (link.download !== undefined) {
       const url = URL.createObjectURL(blob);
       link.setAttribute("href", url);
-      link.setAttribute("download", `rapport_transactions_detaillees.csv`);
+      link.setAttribute("download", `rapport_transactions_detaillees_${format(new Date(), 'yyyyMMddHHmm')}.csv`);
       link.style.visibility = 'hidden';
       document.body.appendChild(link);
       link.click();
@@ -225,10 +233,14 @@ export default function ReportsPage() {
   };
 
   const exportDetailedToPDF = async () => {
-    if (isLoadingSettings || !settings) return;
+    if (isLoadingSettings || !settings) {
+        toast({ title: "Chargement", description: "Les paramètres de l'entreprise ne sont pas encore chargés.", variant: "default"});
+        return;
+    }
     const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' }); 
     const tableColumn = ["N° Ord.", "Date", "Description", "Réf.", "Catégorie", "Type", "Montant"];
     const tableRows: (string | number)[][] = [];
+    const pageMargin = 10;
 
     filteredTransactions.forEach(t => {
       const entryData = [
@@ -236,40 +248,43 @@ export default function ReportsPage() {
         format(t.date, 'dd/MM/yy', { locale: fr }), 
         t.description,
         t.reference || '-',
-        getCategoryById(t.categoryId)?.name || 'Non classé(e)',
+        getCategoryById(t.categoryId!)?.name || 'Non classé(e)',
         getTransactionTypeName(t.type),
-        formatCurrencyCFA(t.amount).replace(/\u00A0/g, ' ')
+        formatForPdf(t.amount)
       ];
       tableRows.push(entryData);
     });
 
-    let startY = 10;
+    let logoStartY = 10;
+    let headerTextStartY = logoStartY;
+    const logoMaxHeight = 12;
+    const logoMaxWidth = 35;
+    let actualLogoWidth = 0;
+
     if (settings.companyLogoUrl) {
         try {
             const response = await fetch(settings.companyLogoUrl);
             if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
             const blob = await response.blob();
-            const reader = new FileReader();
             await new Promise<void>((resolve, reject) => {
+                const reader = new FileReader();
                 reader.onloadend = () => {
-                     if (reader.error) {
-                         console.error("Erreur FileReader (Rapports):", reader.error);
-                        reject(reader.error);
-                        return;
-                    }
+                     if (reader.error) { console.error("Erreur FileReader (Rapports):", reader.error); reject(reader.error); return; }
                     try {
-                        doc.addImage(reader.result as string, 'PNG', 14, startY, 30, 15); 
-                        startY += 20; 
-                        resolve();
-                    } catch (imgError) {
-                         console.error("Erreur doc.addImage (Rapports):", imgError);
-                        reject(imgError);
-                    }
+                        const img = new Image();
+                        img.onload = () => {
+                            let w = img.width; let h = img.height; const ratio = w / h;
+                            if (w > logoMaxWidth) { w = logoMaxWidth; h = w / ratio; }
+                            if (h > logoMaxHeight) { h = logoMaxHeight; w = h * ratio; }
+                            actualLogoWidth = w;
+                            doc.addImage(reader.result as string, 'PNG', pageMargin, logoStartY, w, h);
+                            resolve();
+                        };
+                        img.onerror = reject;
+                        img.src = reader.result as string;
+                    } catch (imgError) { reject(imgError); }
                 };
-                reader.onerror = (error) => {
-                    console.error("Erreur onerror FileReader (Rapports):", error);
-                    reject(error);
-                };
+                reader.onerror = reject;
                 reader.readAsDataURL(blob);
             });
         } catch (error) {
@@ -277,65 +292,78 @@ export default function ReportsPage() {
         }
     }
 
-    doc.setFontSize(14);
-    doc.text(settings.companyName || "GESTION CAISSE", doc.internal.pageSize.getWidth() / 2, startY, { align: 'center' });
-    startY += 5;
-    if (settings.companyAddress) {
-      doc.setFontSize(8);
-      doc.text(settings.companyAddress, doc.internal.pageSize.getWidth() / 2, startY, { align: 'center' });
-      startY += 5;
-    }
-    startY += 5;
-
+    const headerTextX = pageMargin + (actualLogoWidth > 0 ? actualLogoWidth + 3 : 0);
+    const headerTextWidth = doc.internal.pageSize.getWidth() - headerTextX - pageMargin;
 
     doc.setFontSize(12);
-    doc.text(reportTitle, doc.internal.pageSize.getWidth() / 2, startY, { align: 'center' });
-    startY += 5;
-    doc.setFontSize(9);
-    doc.text(`Date d'export: ${currentPrintDate}`, doc.internal.pageSize.getWidth() / 2, startY, { align: 'center' });
-    startY += 7;
+    doc.setFont("helvetica", "bold");
+    doc.text(settings.companyName || "GESTION CAISSE", headerTextX, headerTextStartY + 4, { align: 'left', maxWidth: headerTextWidth });
+    headerTextStartY += 5;
+    
+    if (settings.companyAddress) {
+      doc.setFontSize(7);
+      doc.setFont("helvetica", "normal");
+      doc.text(settings.companyAddress, headerTextX, headerTextStartY, { align: 'left', maxWidth: headerTextWidth });
+      headerTextStartY += 3;
+    }
+
+    let mainContentStartY = Math.max(logoStartY + logoMaxHeight + 3, headerTextStartY + 3);
+
+    doc.setFontSize(10);
+    doc.setFont("helvetica", "bold");
+    doc.text(reportTitle, doc.internal.pageSize.getWidth() / 2, mainContentStartY, { align: 'center' });
+    mainContentStartY += 5;
+    doc.setFontSize(8);
+    doc.setFont("helvetica", "normal");
+    doc.text(`Date d'export: ${currentPrintDate}`, doc.internal.pageSize.getWidth() / 2, mainContentStartY, { align: 'center' });
+    mainContentStartY += 6;
 
 
     (doc as any).autoTable({
       head: [tableColumn],
       body: tableRows,
-      startY: startY,
+      startY: mainContentStartY,
       theme: 'grid',
-      headStyles: { fillColor: [22, 160, 133], fontSize: 7, textColor: [255,255,255] }, 
-      styles: { font: 'helvetica', fontSize: 7, cellPadding: 1, overflow: 'linebreak' }, 
+      headStyles: { fillColor: [74, 85, 104], fontSize: 7, textColor: [255,255,255] }, 
+      styles: { font: 'helvetica', fontSize: 6.5, cellPadding: 1, overflow: 'linebreak' }, 
       columnStyles: {
-        0: { cellWidth: 15 }, 
-        1: { cellWidth: 18 }, 
-        2: { cellWidth: 'auto' }, 
-        3: { cellWidth: 20 }, 
-        4: { cellWidth: 35 }, 
-        5: { cellWidth: 20 }, 
-        6: { cellWidth: 30, halign: 'right' as const }, 
+        0: { cellWidth: 20 }, 
+        1: { cellWidth: 20 }, 
+        2: { cellWidth: 80 }, // Increased for description 
+        3: { cellWidth: 30 }, 
+        4: { cellWidth: 40 }, 
+        5: { cellWidth: 25 }, 
+        6: { cellWidth: 35, halign: 'right' as const }, // Montant
       },
+      margin: { left: pageMargin, right: pageMargin, top: 5, bottom: 15 },
       didDrawPage: (data: any) => {
-        // Pied de page
         const pageCount = doc.internal.getNumberOfPages();
-        doc.setFontSize(8);
+        doc.setFontSize(7);
+        doc.setFont("helvetica", "normal");
         const pageInfo = `Page ${data.pageNumber} sur ${pageCount}`;
-        const footerText = [
+        const footerTextParts = [
             settings.rccm ? `RCCM: ${settings.rccm}` : '',
             settings.niu ? `NIU: ${settings.niu}` : '',
             settings.companyContact ? `Contact: ${settings.companyContact}` : ''
-        ].filter(Boolean).join(' | ');
+        ].filter(Boolean);
         
-        doc.text(footerText, data.settings.margin.left, doc.internal.pageSize.getHeight() - 10);
-        doc.text(pageInfo, doc.internal.pageSize.getWidth() - data.settings.margin.right - doc.getTextWidth(pageInfo), doc.internal.pageSize.getHeight() - 10);
+        doc.text(footerTextParts.join('  |  '), pageMargin, doc.internal.pageSize.getHeight() - 8);
+        doc.text(pageInfo, doc.internal.pageSize.getWidth() - pageMargin - doc.getTextWidth(pageInfo), doc.internal.pageSize.getHeight() - 8);
       }
     });
-    doc.save("rapport_transactions_A4_paysage.pdf");
+    doc.save(`rapport_transactions_${format(new Date(), 'yyyyMMddHHmm')}.pdf`);
   };
 
   const exportDetailedToXLSX = () => {
-    if (isLoadingSettings || !settings) return;
+    if (isLoadingSettings || !settings) {
+        toast({ title: "Chargement", description: "Les paramètres de l'entreprise ne sont pas encore chargés.", variant: "default"});
+        return;
+    }
      const headerXlsx: any[][] = [
       [settings.companyName || "GESTION CAISSE"],
       ...(settings.companyAddress ? [[settings.companyAddress]] : []),
-      [reportTitle],
+      ...(settings.companyContact ? [[`Contact: ${settings.companyContact}`]] : []),
+      [reportTitle.toUpperCase()],
       [`Date d'export: ${currentPrintDate}`],
       [], 
     ];
@@ -345,7 +373,7 @@ export default function ReportsPage() {
       "Date": format(t.date, 'yyyy-MM-dd', { locale: fr }),
       "Description": t.description,
       "Référence": t.reference || '',
-      "Catégorie": getCategoryById(t.categoryId)?.name || 'Non classé(e)',
+      "Catégorie": getCategoryById(t.categoryId!)?.name || 'Non classé(e)',
       "Type": getTransactionTypeName(t.type),
       'Montant (F CFA)': t.amount
     }));
@@ -355,7 +383,6 @@ export default function ReportsPage() {
         [
           (settings.rccm ? `RCCM: ${settings.rccm}` : ''),
           (settings.niu ? `NIU: ${settings.niu}` : ''),
-          (settings.companyContact ? `Contact: ${settings.companyContact}` : '')
         ].filter(Boolean).join(' | ')
     ];
 
@@ -363,7 +390,7 @@ export default function ReportsPage() {
     XLSX.utils.sheet_add_json(worksheet, worksheetData, {origin: `A${headerXlsx.length + 1}`}); 
     XLSX.utils.sheet_add_aoa(worksheet, footerXlsx, { origin: -1 });
     
-    const colWidths = [ {wch:10}, {wch:12}, {wch:40}, {wch:15}, {wch:25}, {wch:15}, {wch:20} ];
+    const colWidths = [ {wch:10}, {wch:12}, {wch:40}, {wch:20}, {wch:25}, {wch:15}, {wch:20} ];
     worksheet['!cols'] = colWidths;
 
     if(!worksheet['!merges']) worksheet['!merges'] = [];
@@ -387,31 +414,50 @@ export default function ReportsPage() {
     
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, "Rapport Détail");
-    XLSX.writeFile(workbook, "rapport_transactions_detaillees.xlsx");
+    XLSX.writeFile(workbook, `rapport_transactions_detaillees_${format(new Date(), 'yyyyMMddHHmm')}.xlsx`);
   };
 
   const handlePrintDetailed = () => {
-    if (isLoadingSettings || !settings) return;
+    if (isLoadingSettings || !settings) {
+        toast({ title: "Chargement", description: "Les paramètres de l'entreprise ne sont pas encore chargés.", variant: "default"});
+        return;
+    }
     window.print();
   };
 
-  const printHeaderFooter = (
-    <>
-      <div className="print:block hidden my-4 text-center">
-        {settings.companyLogoUrl && <img src={settings.companyLogoUrl} alt="Logo Entreprise" className="h-16 mx-auto mb-2 object-contain" data-ai-hint="company logo"/>}
-        <h1 className="text-xl font-bold text-primary print:text-black">{settings.companyName || "GESTION CAISSE"}</h1>
-        {settings.companyAddress && <p className="text-sm print:text-black">{settings.companyAddress}</p>}
-        <h2 className="text-lg font-semibold mt-2 print:text-black">{reportTitle}</h2>
+ const printHeader = (
+     <div className="print:block hidden my-4 text-center">
+        {settings.companyLogoUrl && (
+          <div className="flex justify-start items-start mb-2">
+            <img 
+              src={settings.companyLogoUrl} 
+              alt="Logo Entreprise" 
+              className="h-16 w-auto max-w-[150px] object-contain mr-4" 
+              data-ai-hint="company logo"
+            />
+            <div className="text-left">
+              <h1 className="text-xl font-bold text-primary print:text-black">{settings.companyName || "GESTION CAISSE"}</h1>
+              {settings.companyAddress && <p className="text-sm print:text-black">{settings.companyAddress}</p>}
+            </div>
+          </div>
+        )}
+        {!settings.companyLogoUrl && (
+          <>
+            <h1 className="text-xl font-bold text-primary print:text-black">{settings.companyName || "GESTION CAISSE"}</h1>
+            {settings.companyAddress && <p className="text-sm print:text-black">{settings.companyAddress}</p>}
+          </>
+        )}
+        <h2 className="text-lg font-semibold mt-4 print:text-black">{reportTitle}</h2>
         {currentPrintDate && <p className="text-xs text-muted-foreground mt-1 print:text-black">Imprimé le: {currentPrintDate}</p>}
       </div>
+  );
+
+  const printFooter = (
       <div className="print:block hidden print-footer-info text-xs text-center mt-4 p-2 border-t">
-        {settings.rccm && <span>RCCM: {settings.rccm}</span>}
-        {settings.niu && <span className="mx-2">|</span>}
-        {settings.niu && <span>NIU: {settings.niu}</span>}
-        {settings.companyContact && <span className="mx-2">|</span>}
-        {settings.companyContact && <span>Contact: {settings.companyContact}</span>}
+        <span className="mr-2">{settings.rccm ? `RCCM: ${settings.rccm}` : ''}</span>
+        <span className="mr-2">{settings.niu ? `NIU: ${settings.niu}` : ''}</span>
+        <span>{settings.companyContact ? `Contact: ${settings.companyContact}` : ''}</span>
       </div>
-    </>
   );
 
   const isLoadingPage = isLoadingTransactions || isLoadingCategories || isLoadingSettings;
@@ -424,7 +470,7 @@ export default function ReportsPage() {
       </div>
     );
   }
-  if (!isLoadingPage && globalError) {
+  if (!isLoadingPage && globalError && !filteredTransactions.length && !allCategories.length) {
     return <div className="text-center text-destructive py-10"><p>Erreur de chargement des données des rapports: {globalError}</p></div>;
   }
 
@@ -464,7 +510,7 @@ export default function ReportsPage() {
           </div>
           <div>
             <label htmlFor="category-select" className="text-sm font-medium mb-1 block">Catégorie</label>
-            <Select value={selectedCategory} onValueChange={setSelectedCategory}>
+            <Select value={selectedCategory} onValueChange={setSelectedCategory} disabled={isLoadingCategories}>
               <SelectTrigger id="category-select"><SelectValue placeholder="Sélectionner une catégorie" /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">Toutes les Catégories</SelectItem>
@@ -514,7 +560,7 @@ export default function ReportsPage() {
               <ChartContainer config={chartConfig} className="min-h-[200px] w-full">
                  <RechartsPrimitive.BarChart accessibilityLayer data={spendingByCategory} layout="vertical" margin={{left: 20, right:20}}>
                     <RechartsPrimitive.CartesianGrid horizontal={false} />
-                    <RechartsPrimitive.XAxis type="number" dataKey="value" tickFormatter={(value) => formatCurrencyCFA(value).replace(/\u00A0/g, ' ')} hide/>
+                    <RechartsPrimitive.XAxis type="number" dataKey="value" tickFormatter={(value) => formatCurrencyCFA(value).replace(/\u00A0/g, ' ').replace(/\s/g, ' ')} hide/>
                     <RechartsPrimitive.YAxis dataKey="name" type="category" tickLine={false} axisLine={false} tickMargin={8} width={120} />
                     <ShadTooltip cursor={false} content={<CustomTooltip />} />
                     <RechartsPrimitive.Bar dataKey="value" layout="vertical" radius={5}>
@@ -563,7 +609,7 @@ export default function ReportsPage() {
         </Card>
       </div>
 
-      {printHeaderFooter}
+      {printHeader}
 
       <Card className="print:shadow-none print:border-none print:bg-transparent">
         <CardHeader className="print:hidden">
@@ -630,7 +676,7 @@ export default function ReportsPage() {
                   <TableCell className="print:text-black max-w-[100px] truncate" title={t.reference}>{t.reference || '-'}</TableCell>
                   <TableCell className="print:text-black">
                     <Badge variant="outline" className="print:border-gray-400 print:text-black print:bg-gray-100">
-                      {getCategoryById(t.categoryId)?.name || 'Non classé(e)'}
+                      {getCategoryById(t.categoryId!)?.name || 'Non classé(e)'}
                     </Badge>
                   </TableCell>
                   <TableCell className="print:text-black">
@@ -650,6 +696,7 @@ export default function ReportsPage() {
           </Table>
         </CardContent>
       </Card>
+      {printFooter}
     </div>
   );
 }
