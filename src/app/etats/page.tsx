@@ -37,7 +37,7 @@ interface EtatRow {
 
 export default function EtatsPage() {
   const { transactions, isLoading: isLoadingTransactions, error: errorTransactions, fetchTransactions } = useTransactions();
-  const { categories: allCategories, isLoading: isLoadingCategories, error: errorCategories, fetchCategories: fetchCategoriesHook } = useCategories();
+  const { categories: allCategories, isLoading: isLoadingCategories, error: errorCategoriesHook, fetchCategories: fetchCategoriesHook } = useCategories(); // Renamed errorCategories to errorCategoriesHook
   const { settings, isLoading: isLoadingSettings, fetchSettings: fetchSettingsHook } = useSettings();
   const { budgets, fetchBudgetsForPeriod, upsertBudget, isLoadingBudgets, budgetError } = useBudgets();
   const { toast } = useToast();
@@ -83,7 +83,10 @@ export default function EtatsPage() {
     if (budgetError) {
       toast({ title: "Erreur Budgets", description: budgetError, variant: "destructive" });
     }
-  }, [budgetError, toast]);
+    if (errorCategoriesHook) { // Use the renamed errorCategoriesHook
+      toast({ title: "Erreur Catégories", description: errorCategoriesHook, variant: "destructive"});
+    }
+  }, [budgetError, errorCategoriesHook, toast]);
 
 
   useEffect(() => {
@@ -194,17 +197,25 @@ export default function EtatsPage() {
             const blob = await response.blob();
             const reader = new FileReader();
             await new Promise<void>((resolve, reject) => {
-                reader.onload = () => {
-                    doc.addImage(reader.result as string, 'PNG', 14, startY, 30, 15); // Adjust x, y, width, height as needed
-                    resolve();
+                reader.onloadend = () => {
+                     if (reader.error) {
+                        reject(reader.error);
+                        return;
+                    }
+                    try {
+                        doc.addImage(reader.result as string, 'PNG', 14, startY, 30, 15); // Adjust x, y, width, height as needed
+                        startY += 20; // Adjust spacing after logo
+                        resolve();
+                    } catch (imgError) {
+                        reject(imgError);
+                    }
                 };
-                reader.onerror = reject;
+                reader.onerror = (error) => reject(error);
                 reader.readAsDataURL(blob);
             });
-            startY += 20; // Adjust spacing after logo
         } catch (error) {
-            console.error("Erreur de chargement du logo pour PDF:", error);
-            // Continuer sans logo si erreur
+            console.error("Erreur de chargement du logo pour PDF (Etats):", error);
+            // Continuer sans logo si erreur, startY n'est pas incrémenté
         }
     }
 
@@ -273,7 +284,7 @@ export default function EtatsPage() {
       theme: 'grid',
       styles: {...tableCellStyles, fontStyle: 'bold' as const},
       columnStyles: { 
-        0: { cellWidth: 10 + 50 + (doc.internal.pageSize.width - (10+50+35+35+20+30) - 28) / 2  }, // Adjust to take remaining width
+        0: { cellWidth: 10 + 50 + (doc.internal.pageSize.getWidth() - (10+50+35+35+20+30) - 28) / 2  }, // Adjust to take remaining width
         1: { cellWidth: 35, halign: 'right' as const },
         2: { cellWidth: 35, halign: 'right' as const },
         3: { cellWidth: 20 },
@@ -326,7 +337,7 @@ export default function EtatsPage() {
       theme: 'grid',
       styles: {...tableCellStyles, fontStyle: 'bold' as const},
        columnStyles: { 
-        0: { cellWidth: 10 + 50 + (doc.internal.pageSize.width - (10+50+35+35+20+30) - 28) / 2  },
+        0: { cellWidth: 10 + 50 + (doc.internal.pageSize.getWidth() - (10+50+35+35+20+30) - 28) / 2  },
         1: { cellWidth: 35, halign: 'right' as const },
         2: { cellWidth: 35, halign: 'right' as const },
         3: { cellWidth: 20 },
@@ -548,7 +559,7 @@ export default function EtatsPage() {
   );
 
   const isLoadingPage = isLoadingCategories || isLoadingTransactions || isLoadingSettings || isLoadingBudgets;
-  const globalError = errorCategories || errorTransactions || budgetError; 
+  const globalError = errorCategoriesHook || errorTransactions || budgetError; 
 
   if (isLoadingPage && !filteredTransactions.length && !allCategories.length && !budgets.length) {
     return (
@@ -667,3 +678,5 @@ export default function EtatsPage() {
     </div>
   );
 }
+
+    

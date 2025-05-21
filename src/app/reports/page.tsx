@@ -46,6 +46,7 @@ export default function ReportsPage() {
     categories: allCategories, 
     getCategoryById, 
     isLoadingCategories, 
+    errorCategories: errorCategoriesHook, // Renamed errorCategories
     fetchCategories: fetchCategoriesHook 
   } = useCategories();
   const { settings, isLoading: isLoadingSettings, fetchSettings: fetchSettingsHook } = useSettings();
@@ -251,14 +252,22 @@ export default function ReportsPage() {
             const blob = await response.blob();
             const reader = new FileReader();
             await new Promise<void>((resolve, reject) => {
-                reader.onload = () => {
-                    doc.addImage(reader.result as string, 'PNG', 14, startY, 30, 15); 
-                    resolve();
+                reader.onloadend = () => {
+                     if (reader.error) {
+                        reject(reader.error);
+                        return;
+                    }
+                    try {
+                        doc.addImage(reader.result as string, 'PNG', 14, startY, 30, 15); 
+                        startY += 20; 
+                        resolve();
+                    } catch (imgError) {
+                        reject(imgError);
+                    }
                 };
-                reader.onerror = reject;
+                reader.onerror = (error) => reject(error);
                 reader.readAsDataURL(blob);
             });
-            startY += 20; 
         } catch (error) {
             console.error("Erreur de chargement du logo pour PDF (Rapports):", error);
         }
@@ -380,7 +389,7 @@ export default function ReportsPage() {
   );
 
   const isLoadingPage = isLoadingTransactions || isLoadingCategories || isLoadingSettings;
-  const globalError = errorTransactions || errorCategories;
+  const globalError = errorTransactions || errorCategoriesHook;
 
   if (isLoadingPage && !filteredTransactions.length && !allCategories.length) {
     return (
@@ -618,3 +627,5 @@ export default function ReportsPage() {
     </div>
   );
 }
+
+    

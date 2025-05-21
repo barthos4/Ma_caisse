@@ -93,7 +93,7 @@ export default function JournalPage() {
       const success = await deleteTransaction(id);
       if (success) {
         toast({ title: "Succès", description: "Transaction supprimée du journal." });
-        // fetchTransactions(); // Re-fetch est géré par le hook useTransactions
+        fetchTransactions(); 
       } else {
         toast({ title: "Erreur", description: errorTransactions || "Impossible de supprimer la transaction.", variant: "destructive" });
       }
@@ -165,20 +165,29 @@ export default function JournalPage() {
     if (settings.companyLogoUrl) {
         try {
             const response = await fetch(settings.companyLogoUrl);
+            if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
             const blob = await response.blob();
             const reader = new FileReader();
             await new Promise<void>((resolve, reject) => {
-                reader.onload = () => {
-                    doc.addImage(reader.result as string, 'PNG', 14, startY, 30, 15); // Adjust x, y, width, height as needed
-                    resolve();
+                reader.onloadend = () => {
+                    if (reader.error) {
+                        reject(reader.error);
+                        return;
+                    }
+                    try {
+                        doc.addImage(reader.result as string, 'PNG', 14, startY, 30, 15); // Adjust x, y, width, height as needed
+                        startY += 20; // Adjust spacing after logo
+                        resolve();
+                    } catch (imgError) {
+                        reject(imgError);
+                    }
                 };
-                reader.onerror = reject;
+                reader.onerror = (error) => reject(error);
                 reader.readAsDataURL(blob);
             });
-            startY += 20; // Adjust spacing after logo
         } catch (error) {
-            console.error("Erreur de chargement du logo pour PDF:", error);
-            // Continuer sans logo si erreur
+            console.error("Erreur de chargement du logo pour PDF (Journal):", error);
+            // Continuer sans logo si erreur, startY n'est pas incrémenté
         }
     }
 
@@ -233,14 +242,15 @@ export default function JournalPage() {
 
   const exportToXLSX = () => {
     if (isLoadingSettings || !settings) return;
-    const headerXlsx = [
-      { col1: settings.companyName || "GESTION CAISSE" },
-      ...(settings.companyAddress ? [{ col1: settings.companyAddress }] : []),
-      ...(settings.rccm ? [{col1: `RCCM: ${settings.rccm}`}] : []),
-      ...(settings.niu ? [{col1: `NIU: ${settings.niu}`}] : []),
-      { col1: "Journal de Caisse" },
-      { col1: `Date d'export: ${currentDate}` },
-      {}, 
+    const headerXlsx: any[][] = [ // Array of arrays for rows
+      [settings.companyName || "GESTION CAISSE"],
+      ...(settings.companyAddress ? [[settings.companyAddress]] : []),
+       ...(settings.rccm || settings.niu ? [[
+        (settings.rccm ? `RCCM: ${settings.rccm}` : '') + (settings.rccm && settings.niu ? ' | ' : '') + (settings.niu ? `NIU: ${settings.niu}` : '')
+      ]] : []),
+      ["Journal de Caisse"],
+      [`Date d'export: ${currentDate}`],
+      [], // Empty row for spacing
     ];
     
     const worksheetData = journalEntries.map(entry => ({
@@ -255,14 +265,15 @@ export default function JournalPage() {
       'Solde (F CFA)': entry.balance
     }));
 
-    const worksheet = XLSX.utils.json_to_sheet(headerXlsx, {skipHeader: true});
-    XLSX.utils.sheet_add_json(worksheet, worksheetData, {origin: `A${headerXlsx.length +1}`}); 
+    const worksheet = XLSX.utils.aoa_to_sheet(headerXlsx); // Start with header
+    XLSX.utils.sheet_add_json(worksheet, worksheetData, {origin: `A${headerXlsx.length +1}`}); // Add data after header
     
     const colWidths = [
         {wch:10}, {wch:12}, {wch:40}, {wch:15}, {wch:20}, {wch:10}, {wch:15}, {wch:15}, {wch:15}
     ];
     worksheet['!cols'] = colWidths;
 
+    // Merge header cells
     if(!worksheet['!merges']) worksheet['!merges'] = [];
     const maxColIndex = colWidths.length - 1;
     headerXlsx.forEach((_, rowIndex) => {
@@ -271,13 +282,14 @@ export default function JournalPage() {
         }
     });
     
+    // Apply currency format to relevant columns
     const currencyFormat = '#,##0 "F CFA"';
-    const firstDataRow = headerXlsx.length + 2; 
+    const firstDataRow = headerXlsx.length + 2; // Header row for data + one for spacing
     for (let i = 0; i < worksheetData.length; i++) {
         const rowIndex = firstDataRow + i;
-        if (worksheet[`G${rowIndex}`]) worksheet[`G${rowIndex}`].z = currencyFormat; 
-        if (worksheet[`H${rowIndex}`]) worksheet[`H${rowIndex}`].z = currencyFormat; 
-        if (worksheet[`I${rowIndex}`]) worksheet[`I${rowIndex}`].z = currencyFormat; 
+        if (worksheet[`G${rowIndex}`]) worksheet[`G${rowIndex}`].z = currencyFormat; // Revenu
+        if (worksheet[`H${rowIndex}`]) worksheet[`H${rowIndex}`].z = currencyFormat; // Dépense
+        if (worksheet[`I${rowIndex}`]) worksheet[`I${rowIndex}`].z = currencyFormat; // Solde
     }
 
     const workbook = XLSX.utils.book_new();
@@ -436,3 +448,5 @@ export default function JournalPage() {
     </div>
   );
 }
+
+    
