@@ -14,7 +14,6 @@ interface AuthContextType {
   session: Session | null;
   isLoading: boolean;
   login: (email: string, password?: string) => Promise<{ error: AuthError }>;
-  signup: (email: string, password?: string) => Promise<{ error: AuthError }>;
   logout: () => Promise<void>;
 }
 
@@ -45,11 +44,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setIsLoading(false);
 
         if (event === 'SIGNED_OUT') {
-          if (pathname !== '/login' && pathname !== '/signup') {
+          if (pathname !== '/login') { // Removed /signup check
             router.replace('/login');
           }
         } else if (event === 'SIGNED_IN') {
-          if (pathname === '/login' || pathname === '/signup') {
+          if (pathname === '/login') { // Removed /signup check
              router.replace('/');
           }
         }
@@ -68,22 +67,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return { error };
   }, []);
 
-  const signupCallback = useCallback(async (email: string, password?: string): Promise<{ error: AuthError }> => {
-    setIsLoading(true);
-    const { error } = await supabase.auth.signUp({ email, password: password! });
-    setIsLoading(false);
-    return { error };
-  }, []);
-
   const logoutCallback = useCallback(async (): Promise<void> => {
     setIsLoading(true);
     await supabase.auth.signOut();
     // setUser(null); // Handled by onAuthStateChange
     // setSession(null); // Handled by onAuthStateChange
     // No need to manually set isLoading to false here if onAuthStateChange handles it
-    // However, if onAuthStateChange might not fire immediately or if an error occurs in signOut
-    // it might be safer to ensure isLoading is set to false.
-    // For now, relying on onAuthStateChange.
   }, []);
   
   const contextValue: AuthContextType = {
@@ -91,7 +80,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     session,
     isLoading,
     login: loginCallback,
-    signup: signupCallback,
     logout: logoutCallback,
   };
 

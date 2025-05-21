@@ -3,7 +3,7 @@
 import type { ReactNode } from 'react';
 import { AppSidebar } from '@/components/layout/app-sidebar';
 import { SidebarProvider, SidebarInset } from '@/components/ui/sidebar';
-import { useAuth } from '@/hooks/use-auth.tsx'; // Updated import path
+import { useAuth } from '@/hooks/use-auth.tsx';
 import { useRouter, usePathname } from 'next/navigation';
 import { useEffect } from 'react';
 import { Skeleton } from '@/components/ui/skeleton'; 
@@ -12,10 +12,10 @@ interface MainLayoutProps {
   children: ReactNode;
 }
 
-const PUBLIC_ROUTES = ['/login', '/signup'];
+const PUBLIC_ROUTES = ['/login']; // Removed '/signup'
 
 export function MainLayout({ children }: MainLayoutProps) {
-  const { user, session, isLoading } = useAuth(); // Utilise user et session pour isAuthenticated
+  const { user, session, isLoading } = useAuth(); 
   const router = useRouter();
   const pathname = usePathname();
 
@@ -51,7 +51,7 @@ export function MainLayout({ children }: MainLayoutProps) {
   if (!isAuthenticated && !isPublicRouteCurrent) {
     return (
        <div className="flex min-h-screen items-center justify-center bg-background">
-        <p>Redirection...</p> {/* Ou un loader plus élaboré */}
+        <p>Redirection...</p>
       </div>
     );
   }
