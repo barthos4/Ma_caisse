@@ -16,7 +16,7 @@ const defaultSettings: AppSettings = {
   companyContact: null,
 };
 
-const LOGO_BUCKET_NAME = 'company_logos'; // Assurez-vous que ce nom correspond à votre bucket Supabase
+const LOGO_BUCKET_NAME = 'companylogos'; // Correction du nom du bucket
 
 export function useSettings() {
   const { user } = useAuth();
@@ -39,7 +39,7 @@ export function useSettings() {
         .eq('user_id', user.id)
         .single();
 
-      if (fetchError && fetchError.code !== 'PGRST116') {
+      if (fetchError && fetchError.code !== 'PGRST116') { // PGRST116: no rows found, which is fine for new users
         throw fetchError;
       }
       if (data) {
@@ -52,10 +52,7 @@ export function useSettings() {
             companyContact: data.company_contact,
         });
       } else {
-        // Si aucune configuration n'existe pour l'utilisateur, nous pourrions insérer les valeurs par défaut
-        // ou simplement utiliser les valeurs par défaut de l'état local.
-        // Pour l'instant, nous utilisons les valeurs par défaut de l'état.
-        setSettings(prev => ({...prev, user_id: user.id })); // Assurer que user_id est là pour un futur upsert
+        setSettings(prev => ({...defaultSettings, user_id: user.id })); // Ensure user_id is set for potential upsert
       }
     } catch (e: any) {
       console.error("Erreur lors de la lecture des paramètres de l'application:", e);
@@ -70,7 +67,6 @@ export function useSettings() {
     if (user) {
       fetchSettings();
     } else {
-      // Reset to default if user logs out or is not available
       setSettings(defaultSettings);
       setIsLoading(false);
     }
@@ -83,18 +79,14 @@ export function useSettings() {
     setError(null);
 
     const fileExt = logoFile.name.split('.').pop();
-    const fileName = `${user.id}/logo.${fileExt}`; // Chemin unique par utilisateur
+    const fileName = `${user.id}/logo.${fileExt?.toLowerCase()}`; 
     
     try {
-      // Tenter de supprimer l'ancien logo s'il existe pour éviter les fichiers orphelins
-      // Ceci est optionnel et peut être rendu plus robuste (lister les fichiers, etc.)
-      // Pour l'instant, nous allons simplement essayer d'écraser avec upsert:true
-      
       const { data: uploadData, error: uploadError } = await supabase.storage
         .from(LOGO_BUCKET_NAME)
         .upload(fileName, logoFile, {
           cacheControl: '3600',
-          upsert: true, // Écrase le fichier s'il existe déjà au même chemin
+          upsert: true, 
         });
 
       if (uploadError) throw uploadError;
@@ -110,78 +102,67 @@ export function useSettings() {
       return { publicUrl: urlData.publicUrl, error: null };
 
     } catch (e: any) {
-      console.error("Erreur de téléversement du logo:", e);
-      const errorMessage = e.message || "Erreur lors du téléversement du logo.";
+      console.error("Erreur de téléversement du logo (objet complet):", e);
+      let errorMessage = "Erreur lors du téléversement du logo.";
+      if (e && e.message) {
+        errorMessage = e.message;
+      }
+      // Tentative d'obtenir plus de détails si c'est une erreur Supabase
+      if (e && typeof e === 'object') {
+        if ((e as any).details) errorMessage += ` Détails: ${(e as any).details}`;
+        if ((e as any).code) errorMessage += ` Code: ${(e as any).code}`;
+      }
       setError(errorMessage);
       return { publicUrl: null, error: errorMessage };
     }
   };
-
 
   const updateSettings = useCallback(async (newSettings: Partial<Omit<AppSettings, 'user_id'>>) => {
     if (!user) {
       setError("Utilisateur non authentifié.");
       return false;
     }
-    // setIsLoading(true); // Peut-être un état de sauvegarde distinct
     setError(null);
 
     try {
+      const currentSettingsData = (await supabase.from('app_settings').select('*').eq('user_id', user.id).single()).data;
+
       const settingsToUpsert: TablesInsert<'app_settings'> = {
-        user_id: user.id, // Toujours s'assurer que user_id est défini
-        company_name: newSettings.companyName !== undefined ? newSettings.companyName : settings.companyName,
-        company_address: newSettings.companyAddress !== undefined ? newSettings.companyAddress : settings.companyAddress,
-        company_logo_url: newSettings.companyLogoUrl !== undefined ? newSettings.companyLogoUrl : settings.companyLogoUrl,
-        rccm: newSettings.rccm !== undefined ? newSettings.rccm : settings.rccm,
-        niu: newSettings.niu !== undefined ? newSettings.niu : settings.niu,
-        company_contact: newSettings.companyContact !== undefined ? newSettings.companyContact : settings.companyContact,
+        user_id: user.id,
+        company_name: newSettings.companyName !== undefined ? (newSettings.companyName || null) : (currentSettingsData?.company_name || null),
+        company_address: newSettings.companyAddress !== undefined ? (newSettings.companyAddress || null) : (currentSettingsData?.company_address || null),
+        company_logo_url: newSettings.companyLogoUrl !== undefined ? (newSettings.companyLogoUrl || null) : (currentSettingsData?.company_logo_url || null),
+        rccm: newSettings.rccm !== undefined ? (newSettings.rccm || null) : (currentSettingsData?.rccm || null),
+        niu: newSettings.niu !== undefined ? (newSettings.niu || null) : (currentSettingsData?.niu || null),
+        company_contact: newSettings.companyContact !== undefined ? (newSettings.companyContact || null) : (currentSettingsData?.company_contact || null),
         updated_at: new Date().toISOString(),
       };
       
-      // Nettoyer les champs undefined pour l'upsert
-      for (const key in settingsToUpsert) {
-        if (settingsToUpsert[key as keyof typeof settingsToUpsert] === undefined) {
-           // Garder null si c'est intentionnel, sinon utiliser la valeur existante de l'état
-           const existingValue = settings[key as keyof AppSettings];
-            if (existingValue === null || (newSettings as any)[key] === null) {
-                 (settingsToUpsert as any)[key] = null;
-            } else {
-                (settingsToUpsert as any)[key] = existingValue;
-            }
-        }
-         // Si la nouvelle valeur est une chaîne vide, la traiter comme null pour la BD (sauf si le champ doit être une chaîne vide)
-        if (typeof (settingsToUpsert as any)[key] === 'string' && (settingsToUpsert as any)[key].trim() === '' && key !== 'companyName') { // companyName peut être une chaîne vide
-            if ((newSettings as any)[key] === '') (settingsToUpsert as any)[key] = null;
-        }
-      }
-      
-      const { error: upsertError } = await supabase
+      const { data: upsertedData, error: upsertError } = await supabase
         .from('app_settings')
         .upsert(settingsToUpsert, { onConflict: 'user_id' })
-        .select() // Pour obtenir la ligne mise à jour/insérée
+        .select() 
         .single();
 
       if (upsertError) throw upsertError;
       
-      // Mettre à jour l'état local avec les données de newSettings
-      setSettings(prev => ({
-        ...prev, // Conserver les anciennes valeurs non modifiées
-        ...(newSettings.companyName !== undefined && { companyName: newSettings.companyName }),
-        ...(newSettings.companyAddress !== undefined && { companyAddress: newSettings.companyAddress }),
-        ...(newSettings.companyLogoUrl !== undefined && { companyLogoUrl: newSettings.companyLogoUrl }),
-        ...(newSettings.rccm !== undefined && { rccm: newSettings.rccm }),
-        ...(newSettings.niu !== undefined && { niu: newSettings.niu }),
-        ...(newSettings.companyContact !== undefined && { companyContact: newSettings.companyContact }),
-      }));
-      // setIsLoading(false);
+      if (upsertedData) {
+        setSettings({
+            companyName: upsertedData.company_name,
+            companyAddress: upsertedData.company_address,
+            companyLogoUrl: upsertedData.company_logo_url,
+            rccm: upsertedData.rccm,
+            niu: upsertedData.niu,
+            companyContact: upsertedData.company_contact,
+        });
+      }
       return true;
     } catch (e: any) {
       console.error("Erreur lors de la sauvegarde des paramètres de l'application:", e);
       setError(e.message || "Erreur de sauvegarde des paramètres.");
-      // setIsLoading(false);
       return false;
     }
-  }, [user, settings]);
+  }, [user]); // settings n'est plus une dépendance directe pour éviter boucle si setSettings est appelé
 
   return {
     settings,
