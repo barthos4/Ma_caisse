@@ -2,14 +2,21 @@
 import type {NextConfig} from 'next';
 
 const nextConfig: NextConfig = {
-  /* config options here */
   typescript: {
+    // !! WARN !!
+    // Dangerously allow production builds to successfully complete even if
+    // your project has type errors.
+    // Il est fortement recommandé de résoudre les erreurs TypeScript avant le déploiement.
     ignoreBuildErrors: true,
   },
   eslint: {
+    // Warning: This allows production builds to successfully complete even if
+    // your project has ESLint errors.
     ignoreDuringBuilds: true,
   },
   images: {
+    // Configuration des domaines autorisés pour next/image
+    // Assurez-vous que tous les hostnames d'images externes sont listés ici.
     remotePatterns: [
       {
         protocol: 'https',
@@ -17,25 +24,29 @@ const nextConfig: NextConfig = {
         port: '',
         pathname: '/**',
       },
-      { // Added for Supabase Storage (adjust if your Supabase URL pattern is different)
+      {
         protocol: 'https',
-        hostname: '*.supabase.co', // Allows any subdomain of supabase.co
+        hostname: '*.supabase.co', // Pour les images stockées dans Supabase Storage
         port: '',
         pathname: '/**',
       },
-      { // Added to allow images from Canva, as indicated by the error
+      {
         protocol: 'https',
-        hostname: 'www.canva.com',
+        hostname: 'www.canva.com', // Si vous utilisez des images de Canva
         port: '',
         pathname: '/**',
       },
+      // Ajoutez d'autres domaines si nécessaire
     ],
   },
   experimental: {
     serverActions: {
-      bodySizeLimit: '2mb', // Optional: adjust if needed
+      bodySizeLimit: '2mb',
     },
   },
+  // Si vous n'utilisez pas de sortie statique explicite et que vous déployez sur Vercel/Netlify,
+  // vous n'avez généralement pas besoin de output: 'export'.
+  // output: 'export', // Décommentez si vous faites un export statique pour certains hébergeurs.
 };
 
 export default nextConfig;
