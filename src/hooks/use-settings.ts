@@ -16,7 +16,7 @@ const defaultSettings: AppSettings = {
   companyContact: null,
 };
 
-const LOGO_BUCKET_NAME = 'companylogos'; // Correction du nom du bucket
+const LOGO_BUCKET_NAME = 'companylogos';
 
 export function useSettings() {
   const { user } = useAuth();
@@ -39,7 +39,7 @@ export function useSettings() {
         .eq('user_id', user.id)
         .single();
 
-      if (fetchError && fetchError.code !== 'PGRST116') { // PGRST116: no rows found, which is fine for new users
+      if (fetchError && fetchError.code !== 'PGRST116') { 
         throw fetchError;
       }
       if (data) {
@@ -52,7 +52,7 @@ export function useSettings() {
             companyContact: data.company_contact,
         });
       } else {
-        setSettings(prev => ({...defaultSettings, user_id: user.id })); // Ensure user_id is set for potential upsert
+        setSettings(prev => ({...defaultSettings, user_id: user.id }));
       }
     } catch (e: any) {
       console.error("Erreur lors de la lecture des paramètres de l'application:", e);
@@ -73,47 +73,82 @@ export function useSettings() {
   }, [user, fetchSettings]);
 
   const uploadCompanyLogo = async (logoFile: File): Promise<{ publicUrl: string | null; error: string | null }> => {
-    if (!user) {
-      return { publicUrl: null, error: "Utilisateur non authentifié." };
+    if (!user || !user.id) {
+      const authErrorMsg = "Utilisateur non authentifié ou ID utilisateur manquant.";
+      console.error(authErrorMsg);
+      setError(authErrorMsg);
+      return { publicUrl: null, error: authErrorMsg };
     }
-    setError(null);
+    setError(null); 
 
     const fileExt = logoFile.name.split('.').pop();
-    const fileName = `${user.id}/logo.${fileExt?.toLowerCase()}`; 
+    const fileName = `${user.id}/logo.${fileExt?.toLowerCase()}`;
     
+    console.log(`Attempting to upload to bucket: ${LOGO_BUCKET_NAME}, file: ${fileName}, file type: ${logoFile.type}, file size: ${logoFile.size}`);
+
     try {
       const { data: uploadData, error: uploadError } = await supabase.storage
         .from(LOGO_BUCKET_NAME)
         .upload(fileName, logoFile, {
           cacheControl: '3600',
-          upsert: true, 
+          upsert: true,
         });
 
-      if (uploadError) throw uploadError;
+      if (uploadError) {
+        console.error("Supabase uploadError object:", JSON.stringify(uploadError, null, 2));
+        let detailedErrorMessage = `Supabase Storage Error: ${uploadError.message || 'Unknown error'}`;
+        const sbError = uploadError as any;
+        if (sbError.statusCode) detailedErrorMessage += ` (Status: ${sbError.statusCode})`;
+        if (sbError.error) detailedErrorMessage += ` (Details: ${sbError.error})`;
+        if (sbError.stack) console.error("Upload error stack:", sbError.stack);
+        setError(detailedErrorMessage);
+        return { publicUrl: null, error: detailedErrorMessage };
+      }
 
       const { data: urlData } = supabase.storage
         .from(LOGO_BUCKET_NAME)
         .getPublicUrl(fileName);
 
       if (!urlData || !urlData.publicUrl) {
-        throw new Error("Impossible d'obtenir l'URL publique du logo téléversé.");
+        const urlErrorMsg = "Impossible d'obtenir l'URL publique du logo téléversé après succès.";
+        console.error(urlErrorMsg);
+        setError(urlErrorMsg);
+        return { publicUrl: null, error: urlErrorMsg };
       }
       
       return { publicUrl: urlData.publicUrl, error: null };
 
     } catch (e: any) {
-      console.error("Erreur de téléversement du logo (objet complet):", e);
-      let errorMessage = "Erreur lors du téléversement du logo.";
-      if (e && e.message) {
-        errorMessage = e.message;
+      console.error("--- BEGIN DETAILED ERROR LOG (uploadCompanyLogo catch block) ---");
+      console.error("Raw error object 'e':", e);
+
+      let processedMessage = "Erreur de téléversement du logo inconnue.";
+
+      if (e instanceof Error) {
+        processedMessage = `Error Name: ${e.name}, Message: ${e.message}`;
+        if (e.stack) {
+            console.error("Error Stack:", e.stack);
+        }
+        // Check if it's a DOMException which might have specific properties
+        if (typeof DOMException !== 'undefined' && e instanceof DOMException) {
+            processedMessage += `, DOMException Code: ${e.code}`;
+        }
+      } else if (e && typeof e === 'object') {
+        // Try to stringify, but be careful of circular references
+        try {
+            processedMessage = `Object Error: ${JSON.stringify(e, Object.getOwnPropertyNames(e), 2)}`;
+        } catch (stringifyError) {
+            processedMessage = `Object Error (could not stringify): ${Object.prototype.toString.call(e)}`;
+        }
+      } else if (e !== null && e !== undefined) {
+        processedMessage = `Primitive Error: ${String(e)}`;
       }
-      // Tentative d'obtenir plus de détails si c'est une erreur Supabase
-      if (e && typeof e === 'object') {
-        if ((e as any).details) errorMessage += ` Détails: ${(e as any).details}`;
-        if ((e as any).code) errorMessage += ` Code: ${(e as any).code}`;
-      }
-      setError(errorMessage);
-      return { publicUrl: null, error: errorMessage };
+
+      console.error("Processed error message for UI:", processedMessage);
+      console.error("--- END DETAILED ERROR LOG ---");
+      
+      setError(processedMessage);
+      return { publicUrl: null, error: processedMessage };
     }
   };
 
@@ -125,7 +160,15 @@ export function useSettings() {
     setError(null);
 
     try {
-      const currentSettingsData = (await supabase.from('app_settings').select('*').eq('user_id', user.id).single()).data;
+      const { data: currentSettingsData, error: fetchError } = await supabase
+        .from('app_settings')
+        .select('*')
+        .eq('user_id', user.id)
+        .single();
+
+      if (fetchError && fetchError.code !== 'PGRST116') { // PGRST116: no rows found
+        throw fetchError;
+      }
 
       const settingsToUpsert: TablesInsert<'app_settings'> = {
         user_id: user.id,
@@ -162,7 +205,7 @@ export function useSettings() {
       setError(e.message || "Erreur de sauvegarde des paramètres.");
       return false;
     }
-  }, [user]); // settings n'est plus une dépendance directe pour éviter boucle si setSettings est appelé
+  }, [user]); 
 
   return {
     settings,
