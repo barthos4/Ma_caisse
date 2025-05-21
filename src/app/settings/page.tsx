@@ -6,7 +6,7 @@ import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card";
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage, FormDescription } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { useSettings } from "@/hooks/use-settings";
@@ -61,13 +61,20 @@ export default function SettingsPage() {
 
   async function onSubmit(data: SettingsFormValues) {
     setIsSubmitting(true);
-    const success = await updateSettings({
-      companyName: data.companyName,
-      companyAddress: data.companyAddress,
-      companyLogoUrl: data.companyLogoUrl || null, // Ensure null if empty string
-      rccm: data.rccm,
-      niu: data.niu,
-    });
+    const settingsToUpdate: Partial<SettingsFormValues> = {};
+    if (data.companyName !== settings.companyName) settingsToUpdate.companyName = data.companyName;
+    if (data.companyAddress !== settings.companyAddress) settingsToUpdate.companyAddress = data.companyAddress;
+    if (data.companyLogoUrl !== settings.companyLogoUrl) settingsToUpdate.companyLogoUrl = data.companyLogoUrl || null;
+    if (data.rccm !== settings.rccm) settingsToUpdate.rccm = data.rccm;
+    if (data.niu !== settings.niu) settingsToUpdate.niu = data.niu;
+
+    if (Object.keys(settingsToUpdate).length === 0) {
+      toast({ title: "Aucune modification", description: "Aucun paramètre n'a été modifié." });
+      setIsSubmitting(false);
+      return;
+    }
+    
+    const success = await updateSettings(settingsToUpdate);
     setIsSubmitting(false);
     if (success) {
       toast({
