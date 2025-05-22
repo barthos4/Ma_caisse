@@ -1,3 +1,4 @@
+
 "use client";
 import { useState, useMemo, useEffect, useCallback } from "react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -18,6 +19,7 @@ import { useSettings } from "@/hooks/use-settings";
 import { useBudgets } from "@/hooks/use-budgets.ts";
 import { useToast } from "@/hooks/use-toast";
 import { Progress } from "@/components/ui/progress"; 
+import { useAuth } from "@/hooks/use-auth.tsx";
 
 
 import jsPDF from 'jspdf';
@@ -40,6 +42,7 @@ export default function EtatsPage() {
   const { settings, isLoading: isLoadingSettings, fetchSettings: fetchSettingsHook } = useSettings();
   const { budgets, fetchBudgetsForPeriod, upsertBudget, isLoadingBudgets, budgetError } = useBudgets();
   const { toast } = useToast();
+  const { user } = useAuth(); // Ensure user is available for useEffect below
   
   const [currentPrintDate, setCurrentPrintDate] = useState("");
 
@@ -52,20 +55,20 @@ export default function EtatsPage() {
   const [prevusDepenses, setPrevusDepenses] = useState<Record<string, number>>({});
 
   useEffect(() => {
-    fetchTransactions();
-    fetchCategoriesHook();
-    fetchSettingsHook();
+    if (user) { // Only fetch if user is available
+        fetchTransactions();
+        fetchCategoriesHook();
+        fetchSettingsHook();
+    }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); 
+  }, [user]); // Add user as dependency
 
   useEffect(() => {
     if (dateRange?.from && dateRange?.to && user) { 
       fetchBudgetsForPeriod(dateRange.from);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [dateRange, fetchBudgetsForPeriod, user]); // Added user dependency
-
-  const { user } = useAuth(); // Ensure user is available for useEffect above
+  }, [dateRange, user]); // Removed fetchBudgetsForPeriod from deps as it's stable, added user
 
   useEffect(() => {
     const newPrevusRecettes: Record<string, number> = {};
@@ -121,8 +124,12 @@ export default function EtatsPage() {
   };
 
   const handleSaveBudget = async (categoryId: string, type: 'income' | 'expense') => {
+    if (!user) {
+      toast({ title: "Erreur", description: "Utilisateur non authentifié.", variant: "destructive" });
+      return;
+    }
     const amount = type === 'income' ? prevusRecettes[categoryId] : prevusDepenses[categoryId];
-    const numericAmount = Number(amount); // Allow 0, but check for NaN
+    const numericAmount = Number(amount); 
 
     if (isNaN(numericAmount)) {
         toast({ title: "Erreur", description: "Le montant prévu est invalide.", variant: "destructive"});
@@ -203,12 +210,12 @@ export default function EtatsPage() {
     const doc = new jsPDF({ orientation: 'p', unit: 'mm', format: 'a4' }); 
     const tableCellStyles = { fontSize: 8, cellPadding: 1.5 };
     const tableHeaderStyles = { fillColor: [220, 220, 220], textColor: [0,0,0], fontStyle: 'bold' as const, fontSize: 8, halign: 'center' as const };
-    const pageMargin = 14; // Left and right margin
+    const pageMargin = 14; 
 
     let logoStartY = 10;
     let headerTextStartY = logoStartY;
     const logoMaxHeight = 15;
-    const logoMaxWidth = 40; // Increased width for logo
+    const logoMaxWidth = 40; 
     let actualLogoWidth = 0;
 
     if (settings.companyLogoUrl) {
@@ -266,7 +273,7 @@ export default function EtatsPage() {
         }
     }
     
-    const headerTextX = pageMargin + (actualLogoWidth > 0 ? actualLogoWidth + 5 : 0); // X position for text next to logo
+    const headerTextX = pageMargin + (actualLogoWidth > 0 ? actualLogoWidth + 5 : 0); 
     const headerTextWidth = doc.internal.pageSize.getWidth() - headerTextX - pageMargin;
 
 
@@ -288,7 +295,6 @@ export default function EtatsPage() {
       headerTextStartY +=4;
     }
 
-    // Ensure startY for main content is below the tallest element of the header (logo or text block)
     let mainContentStartY = Math.max(logoStartY + logoMaxHeight + 5, headerTextStartY + 5);
 
 
@@ -321,11 +327,11 @@ export default function EtatsPage() {
       styles: tableCellStyles,
       columnStyles: { 
         0: { cellWidth: 10, halign: 'center' as const },
-        1: { cellWidth: 55 }, // Increased width
-        2: { cellWidth: 40, halign: 'right' as const }, // Increased width
-        3: { cellWidth: 40, halign: 'right' as const }, // Increased width
+        1: { cellWidth: 55 }, 
+        2: { cellWidth: 40, halign: 'right' as const }, 
+        3: { cellWidth: 40, halign: 'right' as const }, 
         4: { cellWidth: 15, halign: 'right' as const },
-        5: { cellWidth: 25, halign: 'right' as const } // Increased width
+        5: { cellWidth: 25, halign: 'right' as const } 
       },
       margin: { left: pageMargin, right: pageMargin }
     });
@@ -342,11 +348,11 @@ export default function EtatsPage() {
       theme: 'grid',
       styles: {...tableCellStyles, fontStyle: 'bold' as const},
       columnStyles: { 
-        0: { cellWidth: 65 }, // N° + Types
-        1: { cellWidth: 40 }, // Prévu
-        2: { cellWidth: 40 }, // Réalisé
-        3: { cellWidth: 15 }, // %
-        4: { cellWidth: 25 }  // Ecart
+        0: { cellWidth: 65 }, 
+        1: { cellWidth: 40 }, 
+        2: { cellWidth: 40 }, 
+        3: { cellWidth: 15 }, 
+        4: { cellWidth: 25 }  
       },
       didParseCell: function (data: any) { 
         if (data.row.index === 0 && data.cell.raw.content === 'Total Recettes') {
@@ -377,11 +383,11 @@ export default function EtatsPage() {
       styles: tableCellStyles,
       columnStyles: { 
         0: { cellWidth: 10, halign: 'center' as const },
-        1: { cellWidth: 55 }, // Increased
-        2: { cellWidth: 40, halign: 'right' as const }, // Increased
-        3: { cellWidth: 40, halign: 'right' as const }, // Increased
+        1: { cellWidth: 55 }, 
+        2: { cellWidth: 40, halign: 'right' as const }, 
+        3: { cellWidth: 40, halign: 'right' as const }, 
         4: { cellWidth: 15, halign: 'right' as const },
-        5: { cellWidth: 25, halign: 'right' as const }  // Increased
+        5: { cellWidth: 25, halign: 'right' as const }  
       },
       margin: { left: pageMargin, right: pageMargin }
     });
@@ -411,7 +417,7 @@ export default function EtatsPage() {
       },
       margin: { left: pageMargin, right: pageMargin }
     });
-    mainContentStartY = (doc as any).lastAutoTable.finalY + 10; // Increased space
+    mainContentStartY = (doc as any).lastAutoTable.finalY + 10; 
     
     doc.setFontSize(10);
     const availableWidthForBalance = doc.internal.pageSize.getWidth() - (2 * pageMargin);
@@ -426,7 +432,7 @@ export default function EtatsPage() {
         ],
         startY: mainContentStartY,
         theme: 'plain', 
-        styles: {...tableCellStyles, fontStyle: 'bold' as const, cellPadding: 2 }, // Added cellPadding
+        styles: {...tableCellStyles, fontStyle: 'bold' as const, cellPadding: 2 }, 
         tableWidth: 'auto',
         margin: { left: pageMargin, right: pageMargin },
         didDrawPage: (data: any) => {
@@ -524,7 +530,7 @@ export default function EtatsPage() {
     XLSX.utils.sheet_add_aoa(ws, footerXlsx, { origin: -1 });
 
 
-    ws['!cols'] = [{wch:5}, {wch:35}, {wch:18}, {wch:18}, {wch:10}, {wch:18}]; // Adjusted widths
+    ws['!cols'] = [{wch:5}, {wch:35}, {wch:18}, {wch:18}, {wch:10}, {wch:18}]; 
     
     const currencyFormat = '#,##0 "F CFA"';
     const percentageFormat = '0%';
@@ -550,7 +556,7 @@ export default function EtatsPage() {
     if (ws[`B${balanceDataStartRow + 2}`]) ws[`B${balanceDataStartRow + 2}`].z = currencyFormat; 
 
     if(!ws['!merges']) ws['!merges'] = [];
-    const maxColIndexXlsx = ws['!cols'].length -1;
+    const maxColIndexXlsx = ws['!cols']!.length -1;
     headerXlsx.forEach((row, rowIndex) => {
        if (row.length === 1 && rowIndex < headerXlsx.length -1 ) { 
              ws['!merges']?.push({s: {r:rowIndex, c:0}, e: {r:rowIndex, c:maxColIndexXlsx}});
@@ -796,3 +802,4 @@ export default function EtatsPage() {
     </div>
   );
 }
+
