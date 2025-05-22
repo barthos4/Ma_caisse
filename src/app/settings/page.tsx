@@ -6,7 +6,7 @@ import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card";
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage, FormDescription } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { useSettings } from "@/hooks/use-settings";
@@ -96,10 +96,8 @@ export default function SettingsPage() {
         return;
       }
       logoUrlToSave = uploadedLogoUrl;
-      setSelectedLogoFile(null); // Réinitialiser après le téléversement réussi
+      setSelectedLogoFile(null); 
     } else if (logoPreview === null && settings.companyLogoUrl !== null) {
-      // Si l'aperçu a été explicitement retiré (par exemple, si on ajoutait un bouton "supprimer logo")
-      // et qu'un logo existait, on met l'URL à null pour le supprimer.
       logoUrlToSave = null;
     }
 
@@ -119,24 +117,21 @@ export default function SettingsPage() {
       const formValue = settingsToUpdate[key];
       const currentValue = settings[key];
 
-      // Gérer la comparaison pour les champs qui peuvent être null ou string vide
       const formIsEmpty = formValue === "" || formValue === null || formValue === undefined;
       const currentIsEmpty = currentValue === "" || currentValue === null || currentValue === undefined;
 
       if (formIsEmpty && currentIsEmpty) {
         // Les deux sont "vides", pas de changement
       } else if (formValue !== currentValue) {
-        actualUpdates[key] = formValue === "" ? null : formValue; // Sauvegarder string vide comme null
+        actualUpdates[key] = formValue === "" ? null : formValue; 
         hasChanges = true;
       }
     });
     
-    // Vérifier si seulement le logo a changé (si selectedLogoFile a été traité)
     if (selectedLogoFile && logoUrlToSave !== settings.companyLogoUrl) {
         hasChanges = true;
-        actualUpdates.companyLogoUrl = logoUrlToSave; // S'assurer que cette mise à jour est incluse
+        actualUpdates.companyLogoUrl = logoUrlToSave; 
     } else if (logoPreview === null && settings.companyLogoUrl !== null && !selectedLogoFile){
-        // Cas où le logo a été supprimé (logoPreview est null, pas de nouveau fichier, mais un logo existait)
         hasChanges = true;
         actualUpdates.companyLogoUrl = null;
     }
@@ -156,7 +151,7 @@ export default function SettingsPage() {
         title: "Paramètres enregistrés",
         description: "Vos modifications ont été sauvegardées avec succès.",
       });
-      fetchSettings(); // Re-fetch pour s'assurer que l'état est à jour avec la DB
+      fetchSettings(); 
     } else {
       toast({
         title: "Erreur",
@@ -195,6 +190,7 @@ export default function SettingsPage() {
                 Ces informations seront utilisées dans les en-têtes de vos rapports et documents exportés.
               </CardDescription>
             </CardHeader>
+            <Separator className="my-4" />
             <CardContent className="space-y-4">
               <FormField
                 control={form.control}
@@ -226,7 +222,7 @@ export default function SettingsPage() {
                         />
                       </div>
                     </FormControl>
-                    <FormMessage />
+                    <FormMessage className="text-center" />
                   </FormItem>
                 )}
               />
@@ -238,7 +234,7 @@ export default function SettingsPage() {
                   <FormItem className="mt-6">
                     <FormLabel className="block text-center">Logo de l'entreprise</FormLabel>
                     <FormControl>
-                      <div className="flex flex-col items-center gap-2"> {/* Changé en items-center et gap-2 */}
+                      <div className="flex flex-col items-center gap-2">
                         <Input
                           type="file"
                           accept="image/png, image/jpeg, image/gif, image/webp"
@@ -250,7 +246,7 @@ export default function SettingsPage() {
                         {selectedLogoFile && (
                             <Button type="button" variant="ghost" size="sm" onClick={() => {
                                 setSelectedLogoFile(null);
-                                setLogoPreview(settings.companyLogoUrl || null); // Revenir à l'ancien logo ou null
+                                setLogoPreview(settings.companyLogoUrl || null); 
                                 if (fileInputRef.current) fileInputRef.current.value = "";
                             }} disabled={isLoading}>
                                 Annuler sélection
@@ -259,7 +255,6 @@ export default function SettingsPage() {
                          {!selectedLogoFile && logoPreview && (
                            <Button type="button" variant="outline" size="sm" onClick={() => {
                                 setLogoPreview(null); 
-                                // Laisser selectedLogoFile à null. onSubmit s'occupera de mettre companyLogoUrl à null.
                                 if (fileInputRef.current) fileInputRef.current.value = "";
                            }} disabled={isLoading}>
                                 Supprimer le logo actuel
@@ -278,7 +273,6 @@ export default function SettingsPage() {
                             height={75}
                             className="object-contain max-h-[75px]"
                             onError={() => {
-                              // Gérer le cas où l'URL du logo est invalide
                               setLogoPreview(null); 
                               toast({title: "Erreur Logo", description: "Impossible de charger l'aperçu du logo. L'URL est peut-être invalide.", variant:"destructive"})
                             }}
@@ -290,8 +284,8 @@ export default function SettingsPage() {
                     {!logoPreview && !isLoadingSettings && !isLoading && (
                         <p className="text-xs text-muted-foreground mt-2 text-center">Aucun logo configuré.</p>
                     )}
-                    <FormMessage className="text-center"/> {/* Message d'erreur centré aussi */}
-                    <p className="text-xs text-muted-foreground text-center mt-1">Sélectionnez un fichier image (PNG, JPG, GIF, WEBP, max 2Mo).</p>
+                    <FormDescription className="text-center mt-1">Sélectionnez un fichier image (PNG, JPG, GIF, WEBP, max 2Mo).</FormDescription>
+                    <FormMessage className="text-center"/> 
                   </FormItem>
                 )}
               />
@@ -313,7 +307,7 @@ export default function SettingsPage() {
                 control={form.control}
                 name="niu"
                 render={({ field }) => (
-                  <FormItem>
+                  <FormItem className="mt-6">
                     <FormLabel>N° NIU (Contribuable)</FormLabel>
                     <FormControl>
                       <Input placeholder="Ex: M012345678901X" {...field} value={field.value ?? ""} disabled={isLoading} />
@@ -339,12 +333,13 @@ export default function SettingsPage() {
                         />
                       </div>
                     </FormControl>
-                    <FormMessage />
+                    <FormMessage className="text-center" />
                   </FormItem>
                 )}
               />
             </CardContent>
-            <CardFooter className="border-t px-6 py-4">
+            <Separator className="my-4" />
+            <CardFooter>
               <Button type="submit" disabled={isLoading}>
                 {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                 Enregistrer les Informations
@@ -388,5 +383,3 @@ export default function SettingsPage() {
     </div>
   );
 }
-
-    
