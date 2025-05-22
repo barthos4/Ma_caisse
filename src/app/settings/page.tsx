@@ -6,7 +6,7 @@ import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card";
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage, FormDescription } from "@/components/ui/form";
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { useSettings } from "@/hooks/use-settings";
@@ -21,10 +21,10 @@ import type { AppSettings } from "@/types";
 const settingsFormSchema = z.object({
   companyName: z.string().max(100, "Le nom de l'entreprise est trop long.").optional().nullable(),
   companyAddress: z.string().max(200, "L'adresse de l'entreprise est trop longue.").optional().nullable(),
-  // companyLogoUrl is handled by file upload, not direct form field for Zod
   rccm: z.string().max(50, "Le RCCM est trop long.").optional().nullable(),
   niu: z.string().max(50, "Le NIU est trop long.").optional().nullable(),
   companyContact: z.string().max(100, "Le contact est trop long.").optional().nullable(),
+  // companyLogoUrl est géré par le téléversement de fichier, pas un champ direct pour Zod ici
 });
 
 type SettingsFormValues = z.infer<typeof settingsFormSchema>;
@@ -91,17 +91,15 @@ export default function SettingsPage() {
     if (selectedLogoFile) {
       const { publicUrl: uploadedLogoUrl, error: uploadError } = await uploadCompanyLogo(selectedLogoFile);
       if (uploadError) {
-        // The detailed error is already logged in useSettings, toast will show a user-friendly one
         toast({ title: "Erreur de Téléversement", description: `Impossible de téléverser le logo. ${uploadError}`, variant: "destructive" });
         setIsSubmitting(false);
         return;
       }
       logoUrlToSave = uploadedLogoUrl;
-      setSelectedLogoFile(null);
+      setSelectedLogoFile(null); // Réinitialiser après le téléversement réussi
     } else if (logoPreview === null && settings.companyLogoUrl !== null) {
-      // This case handles if the user wants to remove an existing logo
-      // by clicking a "remove" button (if we implement one) or by clearing the preview somehow.
-      // For now, this mainly applies if the logic to set logoPreview to null is triggered.
+      // Si l'aperçu a été explicitement retiré (par exemple, si on ajoutait un bouton "supprimer logo")
+      // et qu'un logo existait, on met l'URL à null pour le supprimer.
       logoUrlToSave = null;
     }
 
@@ -121,15 +119,30 @@ export default function SettingsPage() {
       const formValue = settingsToUpdate[key];
       const currentValue = settings[key];
 
-      if (formValue !== currentValue) {
-          if (!(formValue === "" && currentValue === null)) {
-            actualUpdates[key] = formValue === "" ? null : formValue;
-            hasChanges = true;
-          }
+      // Gérer la comparaison pour les champs qui peuvent être null ou string vide
+      const formIsEmpty = formValue === "" || formValue === null || formValue === undefined;
+      const currentIsEmpty = currentValue === "" || currentValue === null || currentValue === undefined;
+
+      if (formIsEmpty && currentIsEmpty) {
+        // Les deux sont "vides", pas de changement
+      } else if (formValue !== currentValue) {
+        actualUpdates[key] = formValue === "" ? null : formValue; // Sauvegarder string vide comme null
+        hasChanges = true;
       }
     });
+    
+    // Vérifier si seulement le logo a changé (si selectedLogoFile a été traité)
+    if (selectedLogoFile && logoUrlToSave !== settings.companyLogoUrl) {
+        hasChanges = true;
+        actualUpdates.companyLogoUrl = logoUrlToSave; // S'assurer que cette mise à jour est incluse
+    } else if (logoPreview === null && settings.companyLogoUrl !== null && !selectedLogoFile){
+        // Cas où le logo a été supprimé (logoPreview est null, pas de nouveau fichier, mais un logo existait)
+        hasChanges = true;
+        actualUpdates.companyLogoUrl = null;
+    }
 
-    if (!hasChanges && !selectedLogoFile && logoUrlToSave === settings.companyLogoUrl) {
+
+    if (!hasChanges) {
       toast({ title: "Aucune modification", description: "Aucun paramètre n'a été modifié." });
       setIsSubmitting(false);
       return;
@@ -143,7 +156,7 @@ export default function SettingsPage() {
         title: "Paramètres enregistrés",
         description: "Vos modifications ont été sauvegardées avec succès.",
       });
-      fetchSettings();
+      fetchSettings(); // Re-fetch pour s'assurer que l'état est à jour avec la DB
     } else {
       toast({
         title: "Erreur",
@@ -155,7 +168,7 @@ export default function SettingsPage() {
 
   const isLoading = isLoadingSettings || isSubmitting;
 
-  if (isLoadingSettings && !form.formState.isDirty && !settings.companyName && (!settings.user_id && !settings.user)) { // Adapted condition
+  if (isLoadingSettings && !form.formState.isDirty && !settings.companyName && (!settings.user_id && !settings.user)) {
     return (
       <div className="space-y-6 flex flex-col items-center justify-center min-h-[300px]">
         <Loader2 className="h-12 w-12 animate-spin text-primary" />
@@ -200,10 +213,18 @@ export default function SettingsPage() {
                 control={form.control}
                 name="companyAddress"
                 render={({ field }) => (
-                  <FormItem className="mt-6"> {/* Espacement vertical ajouté */}
-                    <FormLabel className="block text-center">Adresse de l'entreprise</FormLabel> {/* Étiquette centrée */}
+                  <FormItem className="mt-6">
+                    <FormLabel className="block text-center">Adresse de l'entreprise</FormLabel>
                     <FormControl>
-                      <Textarea placeholder="Ex: B.P. 123, Avenue Principale, Quartier, Ville" {...field} value={field.value ?? ""} disabled={isLoading} />
+                      <div className="flex justify-center">
+                        <Textarea 
+                          placeholder="Ex: B.P. 123, Avenue Principale, Quartier, Ville" 
+                          {...field} 
+                          value={field.value ?? ""} 
+                          disabled={isLoading}
+                          className="max-w-xl" 
+                        />
+                      </div>
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -217,7 +238,7 @@ export default function SettingsPage() {
                   <FormItem className="mt-6">
                     <FormLabel className="block text-center">Logo de l'entreprise</FormLabel>
                     <FormControl>
-                      <div className="flex flex-col items-center gap-4">
+                      <div className="flex flex-col items-center gap-2"> {/* Changé en items-center et gap-2 */}
                         <Input
                           type="file"
                           accept="image/png, image/jpeg, image/gif, image/webp"
@@ -229,7 +250,7 @@ export default function SettingsPage() {
                         {selectedLogoFile && (
                             <Button type="button" variant="ghost" size="sm" onClick={() => {
                                 setSelectedLogoFile(null);
-                                setLogoPreview(settings.companyLogoUrl);
+                                setLogoPreview(settings.companyLogoUrl || null); // Revenir à l'ancien logo ou null
                                 if (fileInputRef.current) fileInputRef.current.value = "";
                             }} disabled={isLoading}>
                                 Annuler sélection
@@ -238,17 +259,17 @@ export default function SettingsPage() {
                          {!selectedLogoFile && logoPreview && (
                            <Button type="button" variant="outline" size="sm" onClick={() => {
                                 setLogoPreview(null); 
-                                setSelectedLogoFile(null); 
+                                // Laisser selectedLogoFile à null. onSubmit s'occupera de mettre companyLogoUrl à null.
                                 if (fileInputRef.current) fileInputRef.current.value = "";
                            }} disabled={isLoading}>
-                                Supprimer logo actuel
+                                Supprimer le logo actuel
                            </Button>
                         )}
                       </div>
                     </FormControl>
                     {logoPreview && (
                       <div className="mt-4 text-center">
-                        <FormLabel>Aperçu du logo :</FormLabel>
+                        <FormLabel className="block text-center">Aperçu du logo :</FormLabel>
                         <div className="mt-2 border rounded-md p-2 inline-block bg-muted/30">
                           <Image
                             src={logoPreview}
@@ -257,7 +278,9 @@ export default function SettingsPage() {
                             height={75}
                             className="object-contain max-h-[75px]"
                             onError={() => {
-                              setLogoPreview(null);
+                              // Gérer le cas où l'URL du logo est invalide
+                              setLogoPreview(null); 
+                              toast({title: "Erreur Logo", description: "Impossible de charger l'aperçu du logo. L'URL est peut-être invalide.", variant:"destructive"})
                             }}
                             data-ai-hint="company logo"
                           />
@@ -267,12 +290,11 @@ export default function SettingsPage() {
                     {!logoPreview && !isLoadingSettings && !isLoading && (
                         <p className="text-xs text-muted-foreground mt-2 text-center">Aucun logo configuré.</p>
                     )}
-                    <FormDescription className="text-center">Sélectionnez un fichier image (PNG, JPG, GIF, WEBP, max 2Mo).</FormDescription>
-                    <FormMessage />
+                    <FormMessage className="text-center"/> {/* Message d'erreur centré aussi */}
+                    <p className="text-xs text-muted-foreground text-center mt-1">Sélectionnez un fichier image (PNG, JPG, GIF, WEBP, max 2Mo).</p>
                   </FormItem>
                 )}
               />
-
 
               <FormField
                 control={form.control}
@@ -304,10 +326,18 @@ export default function SettingsPage() {
                 control={form.control}
                 name="companyContact"
                 render={({ field }) => (
-                  <FormItem className="mt-6"> {/* Espacement vertical ajouté */}
-                    <FormLabel className="block text-center">Contact de l'entreprise</FormLabel> {/* Étiquette centrée */}
+                  <FormItem className="mt-6">
+                    <FormLabel className="block text-center">Contact de l'entreprise</FormLabel>
                     <FormControl>
-                      <Input placeholder="Ex: +237 6XX XXX XXX / email@exemple.com" {...field} value={field.value ?? ""} disabled={isLoading} />
+                       <div className="flex justify-center">
+                        <Input 
+                          placeholder="Ex: +237 6XX XXX XXX / email@exemple.com" 
+                          {...field} 
+                          value={field.value ?? ""} 
+                          disabled={isLoading}
+                          className="max-w-xl" 
+                        />
+                      </div>
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -358,3 +388,5 @@ export default function SettingsPage() {
     </div>
   );
 }
+
+    
