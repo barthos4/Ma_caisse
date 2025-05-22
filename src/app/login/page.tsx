@@ -44,7 +44,7 @@ export default function LoginPage() {
       setError(loginError.message || "Email ou mot de passe incorrect.");
     } else {
       // La redirection est gérée par le hook useAuth via onAuthStateChange
-      // router.replace("/"); 
+      // router.replace("/");
     }
   }
 
@@ -97,8 +97,11 @@ export default function LoginPage() {
             </form>
           </Form>
         </CardContent>
-        {/* Le CardFooter avec le lien d'inscription a été retiré */}
       </Card>
+      <div className="mt-8 text-center text-xs text-muted-foreground">
+        <p>Copyright © 2025 SABOLNA Barthélemy.</p>
+        <p>Tous droits réservés.</p>
+      </div>
     </div>
   );
 }
