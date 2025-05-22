@@ -6,7 +6,7 @@ import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card";
-import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage, FormDescription } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { useSettings } from "@/hooks/use-settings";
@@ -80,59 +80,61 @@ export default function SettingsPage() {
         return;
       }
       setSelectedLogoFile(file);
-      setLogoPreview(URL.createObjectURL(file)); 
+      setLogoPreview(URL.createObjectURL(file));
     }
   };
 
   async function onSubmit(data: SettingsFormValues) {
     setIsSubmitting(true);
-    let logoUrlToSave = settings.companyLogoUrl; 
+    let logoUrlToSave = settings.companyLogoUrl;
 
     if (selectedLogoFile) {
       const { publicUrl: uploadedLogoUrl, error: uploadError } = await uploadCompanyLogo(selectedLogoFile);
       if (uploadError) {
-        toast({ title: "Erreur de Téléversement", description: uploadError, variant: "destructive" });
+        // The detailed error is already logged in useSettings, toast will show a user-friendly one
+        toast({ title: "Erreur de Téléversement", description: `Impossible de téléverser le logo. ${uploadError}`, variant: "destructive" });
         setIsSubmitting(false);
         return;
       }
-      logoUrlToSave = uploadedLogoUrl; 
-      setSelectedLogoFile(null); 
+      logoUrlToSave = uploadedLogoUrl;
+      setSelectedLogoFile(null);
     } else if (logoPreview === null && settings.companyLogoUrl !== null) {
-      logoUrlToSave = null; // User wants to remove the logo
+      // This case handles if the user wants to remove an existing logo
+      // by clicking a "remove" button (if we implement one) or by clearing the preview somehow.
+      // For now, this mainly applies if the logic to set logoPreview to null is triggered.
+      logoUrlToSave = null;
     }
 
 
-    const settingsToUpdate: Partial<AppSettings> = { // Use AppSettings type here
+    const settingsToUpdate: Partial<AppSettings> = {
       companyName: data.companyName,
       companyAddress: data.companyAddress,
       rccm: data.rccm,
       niu: data.niu,
       companyContact: data.companyContact,
-      companyLogoUrl: logoUrlToSave, 
+      companyLogoUrl: logoUrlToSave,
     };
-    
+
     const actualUpdates: Partial<AppSettings> = {};
     let hasChanges = false;
     (Object.keys(settingsToUpdate) as Array<keyof AppSettings>).forEach(key => {
-      // Need to handle null vs empty string carefully if the DB expects null
       const formValue = settingsToUpdate[key];
       const currentValue = settings[key];
 
       if (formValue !== currentValue) {
-          // If formValue is an empty string and current value is null, it's not a change for nullable fields
           if (!(formValue === "" && currentValue === null)) {
-            actualUpdates[key] = formValue === "" ? null : formValue; // Convert empty strings to null for nullable fields
+            actualUpdates[key] = formValue === "" ? null : formValue;
             hasChanges = true;
           }
       }
     });
-    
+
     if (!hasChanges && !selectedLogoFile && logoUrlToSave === settings.companyLogoUrl) {
       toast({ title: "Aucune modification", description: "Aucun paramètre n'a été modifié." });
       setIsSubmitting(false);
       return;
     }
-    
+
     const success = await updateSettings(actualUpdates);
     setIsSubmitting(false);
 
@@ -141,7 +143,7 @@ export default function SettingsPage() {
         title: "Paramètres enregistrés",
         description: "Vos modifications ont été sauvegardées avec succès.",
       });
-      fetchSettings(); 
+      fetchSettings();
     } else {
       toast({
         title: "Erreur",
@@ -153,7 +155,7 @@ export default function SettingsPage() {
 
   const isLoading = isLoadingSettings || isSubmitting;
 
-  if (isLoadingSettings && !form.formState.isDirty && !settings.companyName && (!settings.user_id && !user)) { // Adapted condition
+  if (isLoadingSettings && !form.formState.isDirty && !settings.companyName && (!settings.user_id && !settings.user)) { // Adapted condition
     return (
       <div className="space-y-6 flex flex-col items-center justify-center min-h-[300px]">
         <Loader2 className="h-12 w-12 animate-spin text-primary" />
@@ -198,8 +200,8 @@ export default function SettingsPage() {
                 control={form.control}
                 name="companyAddress"
                 render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Adresse de l'entreprise</FormLabel>
+                  <FormItem className="mt-6"> {/* Espacement vertical ajouté */}
+                    <FormLabel className="block text-center">Adresse de l'entreprise</FormLabel> {/* Étiquette centrée */}
                     <FormControl>
                       <Textarea placeholder="Ex: B.P. 123, Avenue Principale, Quartier, Ville" {...field} value={field.value ?? ""} disabled={isLoading} />
                     </FormControl>
@@ -207,70 +209,65 @@ export default function SettingsPage() {
                   </FormItem>
                 )}
               />
-              
+
               <FormField
                 control={form.control}
-                // This field is not part of Zod schema directly for form state,
-                // but FormField helps structure the UI.
-                // We'll name it 'logoUpload' for clarity, though it won't be in form values.
-                name="companyLogoUrl" // Keep a name for FormField structure, even if not Zod validated directly here
-                render={({ field }) => ( // field can be ignored if not directly used for file
-                  <FormItem>
-                    <FormLabel>Logo de l'entreprise</FormLabel>
+                name="companyLogoUrl" 
+                render={({ field }) => ( 
+                  <FormItem className="mt-6">
+                    <FormLabel className="block text-center">Logo de l'entreprise</FormLabel>
                     <FormControl>
-                      <div className="flex items-center gap-4">
-                        <Input 
-                          type="file" 
-                          accept="image/png, image/jpeg, image/gif, image/webp" 
+                      <div className="flex flex-col items-center gap-4">
+                        <Input
+                          type="file"
+                          accept="image/png, image/jpeg, image/gif, image/webp"
                           ref={fileInputRef}
-                          onChange={handleFileChange} 
-                          className="block w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-primary/10 file:text-primary hover:file:bg-primary/20 disabled:opacity-50 disabled:cursor-not-allowed"
+                          onChange={handleFileChange}
+                          className="block w-full max-w-md text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-primary/10 file:text-primary hover:file:bg-primary/20 disabled:opacity-50 disabled:cursor-not-allowed"
                           disabled={isLoading}
                         />
                         {selectedLogoFile && (
                             <Button type="button" variant="ghost" size="sm" onClick={() => {
                                 setSelectedLogoFile(null);
-                                setLogoPreview(settings.companyLogoUrl); 
-                                if (fileInputRef.current) fileInputRef.current.value = ""; 
+                                setLogoPreview(settings.companyLogoUrl);
+                                if (fileInputRef.current) fileInputRef.current.value = "";
                             }} disabled={isLoading}>
                                 Annuler sélection
                             </Button>
                         )}
                          {!selectedLogoFile && logoPreview && (
                            <Button type="button" variant="outline" size="sm" onClick={() => {
-                                setLogoPreview(null); // This will trigger save of null on next submit
-                                setSelectedLogoFile(null); // Ensure no old file is lingering
+                                setLogoPreview(null); 
+                                setSelectedLogoFile(null); 
                                 if (fileInputRef.current) fileInputRef.current.value = "";
-                                // Set the intention to remove the logo
-                                // This implies setting companyLogoUrl to null on submit if no new file selected
                            }} disabled={isLoading}>
-                                Supprimer logo
+                                Supprimer logo actuel
                            </Button>
                         )}
                       </div>
                     </FormControl>
                     {logoPreview && (
-                      <div className="mt-4">
+                      <div className="mt-4 text-center">
                         <FormLabel>Aperçu du logo :</FormLabel>
                         <div className="mt-2 border rounded-md p-2 inline-block bg-muted/30">
-                          <Image 
-                            src={logoPreview} 
-                            alt="Aperçu du logo" 
-                            width={150} 
-                            height={75} 
+                          <Image
+                            src={logoPreview}
+                            alt="Aperçu du logo"
+                            width={150}
+                            height={75}
                             className="object-contain max-h-[75px]"
                             onError={() => {
-                              setLogoPreview(null); 
+                              setLogoPreview(null);
                             }}
                             data-ai-hint="company logo"
                           />
                         </div>
                       </div>
                     )}
-                    {!logoPreview && !isLoadingSettings && (
-                        <p className="text-xs text-muted-foreground mt-2">Aucun logo configuré.</p>
+                    {!logoPreview && !isLoadingSettings && !isLoading && (
+                        <p className="text-xs text-muted-foreground mt-2 text-center">Aucun logo configuré.</p>
                     )}
-                    <FormDescription>Sélectionnez un fichier image (PNG, JPG, GIF, WEBP, max 2Mo).</FormDescription>
+                    <FormDescription className="text-center">Sélectionnez un fichier image (PNG, JPG, GIF, WEBP, max 2Mo).</FormDescription>
                     <FormMessage />
                   </FormItem>
                 )}
@@ -281,7 +278,7 @@ export default function SettingsPage() {
                 control={form.control}
                 name="rccm"
                 render={({ field }) => (
-                  <FormItem>
+                  <FormItem className="mt-6">
                     <FormLabel>N° RCCM</FormLabel>
                     <FormControl>
                       <Input placeholder="Ex: RC/DLA/2024/A/1234" {...field} value={field.value ?? ""} disabled={isLoading} />
@@ -307,8 +304,8 @@ export default function SettingsPage() {
                 control={form.control}
                 name="companyContact"
                 render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Contact de l'entreprise</FormLabel>
+                  <FormItem className="mt-6"> {/* Espacement vertical ajouté */}
+                    <FormLabel className="block text-center">Contact de l'entreprise</FormLabel> {/* Étiquette centrée */}
                     <FormControl>
                       <Input placeholder="Ex: +237 6XX XXX XXX / email@exemple.com" {...field} value={field.value ?? ""} disabled={isLoading} />
                     </FormControl>
@@ -326,7 +323,7 @@ export default function SettingsPage() {
           </Card>
         </form>
       </Form>
-      
+
       <Separator />
 
       <Card>
@@ -342,7 +339,7 @@ export default function SettingsPage() {
           </p>
         </CardContent>
       </Card>
-      
+
       <Separator />
 
       <Card>
