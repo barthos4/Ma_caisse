@@ -1,4 +1,3 @@
-
 "use client";
 import { useState, useMemo, useEffect, useCallback } from "react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -37,12 +36,12 @@ interface EtatRow {
 }
 
 export default function EtatsPage() {
+  const { user } = useAuth(); // Moved up
   const { transactions, isLoading: isLoadingTransactions, error: errorTransactions, fetchTransactions } = useTransactions();
   const { categories: allCategories, isLoading: isLoadingCategories, error: errorCategoriesHook, fetchCategories: fetchCategoriesHook } = useCategories(); 
   const { settings, isLoading: isLoadingSettings, fetchSettings: fetchSettingsHook } = useSettings();
   const { budgets, fetchBudgetsForPeriod, upsertBudget, isLoadingBudgets, budgetError } = useBudgets();
   const { toast } = useToast();
-  const { user } = useAuth(); // Ensure user is available for useEffect below
   
   const [currentPrintDate, setCurrentPrintDate] = useState("");
 
@@ -68,7 +67,7 @@ export default function EtatsPage() {
       fetchBudgetsForPeriod(dateRange.from);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [dateRange, user]); // Removed fetchBudgetsForPeriod from deps as it's stable, added user
+  }, [dateRange, user]);
 
   useEffect(() => {
     const newPrevusRecettes: Record<string, number> = {};
@@ -91,7 +90,10 @@ export default function EtatsPage() {
     if (errorCategoriesHook) { 
       toast({ title: "Erreur Catégories", description: errorCategoriesHook, variant: "destructive"});
     }
-  }, [budgetError, errorCategoriesHook, toast]);
+    if (errorTransactions){
+      toast({ title: "Erreur Transactions", description: errorTransactions, variant: "destructive"})
+    }
+  }, [budgetError, errorCategoriesHook, errorTransactions, toast]);
 
 
   useEffect(() => {
@@ -648,7 +650,7 @@ export default function EtatsPage() {
 
   const printHeader = (
      <div className="print:block hidden my-4 text-center">
-        {settings.companyLogoUrl && (
+        {settings && settings.companyLogoUrl && (
           <div className="flex justify-start items-start mb-2">
             <img 
               src={settings.companyLogoUrl} 
@@ -662,7 +664,7 @@ export default function EtatsPage() {
             </div>
           </div>
         )}
-        {!settings.companyLogoUrl && (
+        {settings && !settings.companyLogoUrl && (
           <>
             <h1 className="text-xl font-bold text-primary print:text-black">{settings.companyName || "GESTION CAISSE"}</h1>
             {settings.companyAddress && <p className="text-sm print:text-black">{settings.companyAddress}</p>}
@@ -675,9 +677,9 @@ export default function EtatsPage() {
 
   const printFooter = (
       <div className="print:block hidden print-footer-info text-xs text-center mt-4 p-2 border-t">
-        <span className="mr-2">{settings.rccm ? `RCCM: ${settings.rccm}` : ''}</span>
-        <span className="mr-2">{settings.niu ? `NIU: ${settings.niu}` : ''}</span>
-        <span>{settings.companyContact ? `Contact: ${settings.companyContact}` : ''}</span>
+        <span className="mr-2">{settings?.rccm ? `RCCM: ${settings.rccm}` : ''}</span>
+        <span className="mr-2">{settings?.niu ? `NIU: ${settings.niu}` : ''}</span>
+        <span>{settings?.companyContact ? `Contact: ${settings.companyContact}` : ''}</span>
       </div>
   );
 
@@ -719,15 +721,15 @@ export default function EtatsPage() {
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
-              <DropdownMenuItem onClick={exportToPDF} disabled={isLoadingSettings || isLoadingBudgets}>
+              <DropdownMenuItem onClick={exportToPDF} disabled={isLoadingSettings || isLoadingBudgets || !settings}>
                 <FileText className="mr-2 h-4 w-4" /> Exporter en PDF (A4 Portrait)
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={exportToXLSX} disabled={isLoadingSettings || isLoadingBudgets}>
+              <DropdownMenuItem onClick={exportToXLSX} disabled={isLoadingSettings || isLoadingBudgets || !settings}>
                 <FileSpreadsheet className="mr-2 h-4 w-4" /> Exporter en XLSX
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
-          <Button onClick={handlePrint} variant="outline" className="w-full sm:w-auto" disabled={isLoadingSettings || isLoadingBudgets}>
+          <Button onClick={handlePrint} variant="outline" className="w-full sm:w-auto" disabled={isLoadingSettings || isLoadingBudgets || !settings}>
             {(isLoadingSettings || isLoadingBudgets) ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Printer className="mr-2 h-4 w-4" />}
              Imprimer
           </Button>
@@ -802,4 +804,3 @@ export default function EtatsPage() {
     </div>
   );
 }
-
