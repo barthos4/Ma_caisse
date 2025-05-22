@@ -1,3 +1,4 @@
+
 "use client";
 import { useState, useMemo, useEffect, useCallback } from "react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -36,7 +37,7 @@ interface EtatRow {
 }
 
 export default function EtatsPage() {
-  const { user } = useAuth(); // Moved up
+  const { user } = useAuth(); 
   const { transactions, isLoading: isLoadingTransactions, error: errorTransactions, fetchTransactions } = useTransactions();
   const { categories: allCategories, isLoading: isLoadingCategories, error: errorCategoriesHook, fetchCategories: fetchCategoriesHook } = useCategories(); 
   const { settings, isLoading: isLoadingSettings, fetchSettings: fetchSettingsHook } = useSettings();
@@ -54,13 +55,13 @@ export default function EtatsPage() {
   const [prevusDepenses, setPrevusDepenses] = useState<Record<string, number>>({});
 
   useEffect(() => {
-    if (user) { // Only fetch if user is available
+    if (user) { 
         fetchTransactions();
         fetchCategoriesHook();
         fetchSettingsHook();
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user]); // Add user as dependency
+  }, [user]); 
 
   useEffect(() => {
     if (dateRange?.from && dateRange?.to && user) { 
@@ -159,7 +160,7 @@ export default function EtatsPage() {
           .filter(t => t.categoryId === category.id)
           .reduce((sum, t) => sum + t.amount, 0);
         
-        const montantPrevu = type === 'income' ? (prevusRecettes[category.id] || 0) : (prevusDepenses[category.id] || 0);
+        const montantPrevu = type === 'income' ? (prevusRecettes[category.id] || 0) : (depensesData.find(d => d.id === category.id)?.montantPrevu || prevusDepenses[category.id] || 0);
         const pourcentageRealisation = montantPrevu > 0 ? (montantRealise / montantPrevu) * 100 : (montantRealise > 0 ? 100 : 0);
         const ecart = montantRealise - montantPrevu;
 
@@ -614,7 +615,7 @@ export default function EtatsPage() {
                     value={(type === 'income' ? prevusRecettes[row.id] : prevusDepenses[row.id]) ?? ''}
                     onChange={(e) => handlePrevuChange(row.id, e.target.value, type)}
                     onBlur={() => handleSaveBudget(row.id, type)}
-                    className="w-32 text-right print:border-none print:bg-transparent print:p-0 print:input-as-text"
+                    className="w-full sm:w-32 text-right print:border-none print:bg-transparent print:p-0 print:input-as-text"
                     placeholder="0"
                     disabled={isLoadingBudgets || isLoadingSettings} 
                   />
@@ -712,7 +713,7 @@ export default function EtatsPage() {
           <h1 className="text-3xl font-bold tracking-tight">Etat de la Caisse</h1>
           <p className="text-muted-foreground">Comparez vos prévisions et réalisations financières.</p>
         </div>
-        <div className="flex gap-2 w-full sm:w-auto">
+        <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button className="w-full sm:w-auto" disabled={isLoadingSettings || isLoadingBudgets}>

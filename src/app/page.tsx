@@ -53,7 +53,7 @@ export default function DashboardPage() {
 
   return (
     <div className="space-y-6">
-      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+      <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Solde Actuel</CardTitle>
@@ -70,25 +70,25 @@ export default function DashboardPage() {
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Revenus Totaux (Ce Mois)</CardTitle> {/* Préciser la période si pertinent */}
+            <CardTitle className="text-sm font-medium">Revenus Totaux (Ce Mois)</CardTitle>
             <TrendingUp className="h-5 w-5 text-muted-foreground" />
           </CardHeader>
           <CardContent>
             <div className="text-3xl font-bold text-accent-foreground">{formatCurrencyCFA(totalIncome)}</div>
             <p className="text-xs text-muted-foreground mt-1">
-              Ensemble de tous les revenus enregistrés.
+              Ensemble de tous les revenus enregistrés ce mois-ci.
             </p>
           </CardContent>
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Dépenses Totales (Ce Mois)</CardTitle> {/* Préciser la période si pertinent */}
+            <CardTitle className="text-sm font-medium">Dépenses Totales (Ce Mois)</CardTitle>
             <TrendingDown className="h-5 w-5 text-muted-foreground" />
           </CardHeader>
           <CardContent>
             <div className="text-3xl font-bold text-destructive">{formatCurrencyCFA(totalExpenses)}</div>
             <p className="text-xs text-muted-foreground mt-1">
-              Ensemble de toutes les dépenses enregistrées.
+              Ensemble de toutes les dépenses enregistrées ce mois-ci.
             </p>
           </CardContent>
         </Card>
@@ -126,7 +126,7 @@ export default function DashboardPage() {
                   tickMargin={8}
                   tickFormatter={(value) => formatCurrencyCFA(value).replace(' F CFA', '')}
                 />
-                <ChartTooltipContent 
+                <ShadTooltip 
                   formatter={(value, name) => (
                     <div>
                       <p className="font-medium">{chartConfig[name as keyof typeof chartConfig]?.label}</p>
@@ -162,7 +162,7 @@ export default function DashboardPage() {
         </CardContent>
       </Card>
 
-      <div className="grid gap-6 md:grid-cols-2">
+      <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
         <Card>
           <CardHeader>
             <CardTitle>Transactions Récentes</CardTitle>
@@ -202,12 +202,12 @@ export default function DashboardPage() {
 
         <Card>
           <CardHeader>
-            <CardTitle>Résumé des Dépenses par Catégorie</CardTitle>
+            <CardTitle>Résumé des Dépenses par Catégorie (Ce Mois)</CardTitle>
             <CardDescription>Répartition de vos dépenses par catégorie.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             {Object.entries(spendingSummary).length === 0 && (
-               <p className="text-sm text-muted-foreground text-center">Aucune donnée de dépense disponible.</p>
+               <p className="text-sm text-muted-foreground text-center">Aucune donnée de dépense disponible pour ce mois.</p>
             )}
             {Object.entries(spendingSummary).map(([category, amount]) => {
               const percentage = totalSpendingFromSummary > 0 ? (amount / totalSpendingFromSummary) * 100 : 0;
