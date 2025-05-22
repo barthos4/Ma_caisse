@@ -68,18 +68,20 @@ export default function EtatsPage() {
       fetchBudgetsForPeriod(dateRange.from);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [dateRange, user]); // Removed fetchBudgetsForPeriod as it's stable due to useCallback
+  }, [dateRange, user]); 
 
   useEffect(() => {
     const newPrevusRecettes: Record<string, number> = {};
     const newPrevusDepenses: Record<string, number> = {};
-    budgets.forEach(budget => {
-      if (budget.type === 'income') {
-        newPrevusRecettes[budget.category_id] = budget.amount;
-      } else {
-        newPrevusDepenses[budget.category_id] = budget.amount;
-      }
-    });
+    if (budgets && budgets.length > 0) {
+        budgets.forEach(budget => {
+          if (budget.type === 'income') {
+            newPrevusRecettes[budget.category_id] = budget.amount;
+          } else {
+            newPrevusDepenses[budget.category_id] = budget.amount;
+          }
+        });
+    }
     setPrevusRecettes(newPrevusRecettes);
     setPrevusDepenses(newPrevusDepenses);
   }, [budgets]);
@@ -110,7 +112,9 @@ export default function EtatsPage() {
   ];
 
   const filteredTransactions = useMemo(() => {
+    if (!transactions) return [];
     return transactions.filter((t) => {
+      if (!t || !t.date) return false;
       const transactionDate = t.date;
       return dateRange?.from && dateRange?.to ?
         transactionDate >= startOfDay(dateRange.from) && transactionDate <= endOfDay(dateRange.to) : true;
@@ -153,6 +157,7 @@ export default function EtatsPage() {
 
 
   const processData = useCallback((categoriesToProcess: Category[], type: 'income' | 'expense'): EtatRow[] => {
+    if (!categoriesToProcess || categoriesToProcess.length === 0) return [];
     return categoriesToProcess
       .filter(c => c.type === type)
       .map((category, index) => {
@@ -176,8 +181,8 @@ export default function EtatsPage() {
       });
   }, [filteredTransactions, prevusRecettes, prevusDepenses]);
 
-  const recettesData = useMemo(() => processData(allCategories, 'income'), [allCategories, processData]);
-  const depensesData = useMemo(() => processData(allCategories, 'expense'), [allCategories, processData]);
+  const recettesData = useMemo(() => processData(allCategories || [], 'income'), [allCategories, processData]);
+  const depensesData = useMemo(() => processData(allCategories || [], 'expense'), [allCategories, processData]);
 
 
   const totalRecettesPrevus = recettesData.reduce((sum, row) => sum + row.montantPrevu, 0);
@@ -345,22 +350,22 @@ export default function EtatsPage() {
         {content: 'Total Recettes', colSpan: 2, styles: {fontStyle: 'bold' as const, halign: 'left' as const}},
         {content: formatForPdf(totalRecettesPrevus), styles: {fontStyle: 'bold' as const, halign: 'right' as const}},
         {content: formatForPdf(totalRecettesRealisees), styles: {fontStyle: 'bold' as const, halign: 'right' as const}},
-        {content: '', styles: {}}, // Espace pour % Réal.
-        {content: '', styles: {}}  // Espace pour Ecart
+        {content: '', styles: {}}, 
+        {content: '', styles: {}}  
       ]],
       startY: mainContentStartY,
       theme: 'grid',
       styles: {...tableCellStyles, fontStyle: 'bold' as const},
       columnStyles: {
-        0: { cellWidth: 65 }, // N° + Type de recettes
-        1: { cellWidth: 40 }, // Montant Prévu
-        2: { cellWidth: 40 }, // Montant Réalisé
-        3: { cellWidth: 15 }, // % Réal. (vide)
-        4: { cellWidth: 25 }  // Ecart (vide)
+        0: { cellWidth: 65 }, 
+        1: { cellWidth: 40 }, 
+        2: { cellWidth: 40 }, 
+        3: { cellWidth: 15 }, 
+        4: { cellWidth: 25 }  
       },
       didParseCell: function (data: any) {
         if (data.row.index === 0 && data.cell.raw.content === 'Total Recettes') {
-             data.cell.colSpan = 2; // S'étend sur N° et Types
+             data.cell.colSpan = 2; 
         }
       },
       margin: { left: pageMargin, right: pageMargin }
@@ -650,9 +655,9 @@ export default function EtatsPage() {
     </Card>
   );
 
-  const printHeader = (
+  const printHeader = settings && (
      <div className="print:block hidden my-4 text-center">
-        {settings && settings.companyLogoUrl && (
+        {settings.companyLogoUrl && (
           <div className="flex justify-start items-start mb-2">
             <img
               src={settings.companyLogoUrl}
@@ -677,18 +682,18 @@ export default function EtatsPage() {
       </div>
   );
 
-  const printFooter = (
+  const printFooter = settings && (
       <div className="print:block hidden print-footer-info text-xs text-center mt-4 p-2 border-t">
-        <span className="mr-2">{settings?.rccm ? `RCCM: ${settings.rccm}` : ''}</span>
-        <span className="mr-2">{settings?.niu ? `NIU: ${settings.niu}` : ''}</span>
-        <span>{settings?.companyContact ? `Contact: ${settings.companyContact}` : ''}</span>
+        <span className="mr-2">{settings.rccm ? `RCCM: ${settings.rccm}` : ''}</span>
+        <span className="mr-2">{settings.niu ? `NIU: ${settings.niu}` : ''}</span>
+        <span>{settings.companyContact ? `Contact: ${settings.companyContact}` : ''}</span>
       </div>
   );
 
   const isLoadingPage = isLoadingCategories || isLoadingTransactions || isLoadingSettings || isLoadingBudgets;
   const globalError = errorCategoriesHook || errorTransactions || budgetError;
 
-  if (isLoadingPage && !filteredTransactions.length && !allCategories.length && !budgets.length) {
+  if (isLoadingPage && (!filteredTransactions || filteredTransactions.length === 0) && (!allCategories || allCategories.length === 0) && (!budgets || budgets.length === 0)) {
     return (
       <div className="flex justify-center items-center h-64">
         <Loader2 className="h-12 w-12 animate-spin text-primary" />
@@ -767,7 +772,7 @@ export default function EtatsPage() {
         </CardContent>
       </Card>
 
-      {(isLoadingCategories || isLoadingBudgets) && (!recettesData.length && !depensesData.length) ? (
+      {(isLoadingCategories || isLoadingBudgets) && (!recettesData || recettesData.length === 0) && (!depensesData || depensesData.length === 0) ? (
         <div className="flex justify-center items-center h-24"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>
       ) : (
         <>
