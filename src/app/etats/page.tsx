@@ -18,7 +18,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { useSettings } from "@/hooks/use-settings";
 import { useBudgets } from "@/hooks/use-budgets.ts";
 import { useToast } from "@/hooks/use-toast";
-import { Progress } from "@/components/ui/progress"; 
+import { Progress } from "@/components/ui/progress";
 import { useAuth } from "@/hooks/use-auth.tsx";
 
 
@@ -27,9 +27,9 @@ import 'jspdf-autotable';
 import * as XLSX from 'xlsx';
 
 interface EtatRow {
-  id: string; 
+  id: string;
   numero: number;
-  type: string; 
+  type: string;
   montantPrevu: number;
   montantRealise: number;
   pourcentageRealisation: number;
@@ -37,13 +37,13 @@ interface EtatRow {
 }
 
 export default function EtatsPage() {
-  const { user } = useAuth(); 
+  const { user } = useAuth();
   const { transactions, isLoading: isLoadingTransactions, error: errorTransactions, fetchTransactions } = useTransactions();
-  const { categories: allCategories, isLoading: isLoadingCategories, error: errorCategoriesHook, fetchCategories: fetchCategoriesHook } = useCategories(); 
+  const { categories: allCategories, isLoading: isLoadingCategories, error: errorCategoriesHook, fetchCategories: fetchCategoriesHook } = useCategories();
   const { settings, isLoading: isLoadingSettings, fetchSettings: fetchSettingsHook } = useSettings();
   const { budgets, fetchBudgetsForPeriod, upsertBudget, isLoadingBudgets, budgetError } = useBudgets();
   const { toast } = useToast();
-  
+
   const [currentPrintDate, setCurrentPrintDate] = useState("");
 
   const [dateRange, setDateRange] = useState<DateRange | undefined>({
@@ -54,21 +54,21 @@ export default function EtatsPage() {
   const [prevusRecettes, setPrevusRecettes] = useState<Record<string, number>>({});
   const [prevusDepenses, setPrevusDepenses] = useState<Record<string, number>>({});
 
-  useEffect(() => {
-    if (user) { 
+ useEffect(() => {
+    if (user) {
         fetchTransactions();
         fetchCategoriesHook();
         fetchSettingsHook();
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user]); 
+  }, [user]);
 
   useEffect(() => {
-    if (dateRange?.from && dateRange?.to && user) { 
+    if (dateRange?.from && dateRange?.to && user) {
       fetchBudgetsForPeriod(dateRange.from);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [dateRange, user]);
+  }, [dateRange, user]); // Removed fetchBudgetsForPeriod as it's stable due to useCallback
 
   useEffect(() => {
     const newPrevusRecettes: Record<string, number> = {};
@@ -83,12 +83,12 @@ export default function EtatsPage() {
     setPrevusRecettes(newPrevusRecettes);
     setPrevusDepenses(newPrevusDepenses);
   }, [budgets]);
-  
+
   useEffect(() => {
     if (budgetError) {
       toast({ title: "Erreur Budgets", description: budgetError, variant: "destructive" });
     }
-    if (errorCategoriesHook) { 
+    if (errorCategoriesHook) {
       toast({ title: "Erreur Catégories", description: errorCategoriesHook, variant: "destructive"});
     }
     if (errorTransactions){
@@ -111,8 +111,8 @@ export default function EtatsPage() {
 
   const filteredTransactions = useMemo(() => {
     return transactions.filter((t) => {
-      const transactionDate = t.date; 
-      return dateRange?.from && dateRange?.to ? 
+      const transactionDate = t.date;
+      return dateRange?.from && dateRange?.to ?
         transactionDate >= startOfDay(dateRange.from) && transactionDate <= endOfDay(dateRange.to) : true;
     });
   }, [transactions, dateRange]);
@@ -132,7 +132,7 @@ export default function EtatsPage() {
       return;
     }
     const amount = type === 'income' ? prevusRecettes[categoryId] : prevusDepenses[categoryId];
-    const numericAmount = Number(amount); 
+    const numericAmount = Number(amount);
 
     if (isNaN(numericAmount)) {
         toast({ title: "Erreur", description: "Le montant prévu est invalide.", variant: "destructive"});
@@ -152,15 +152,15 @@ export default function EtatsPage() {
   };
 
 
-  const processData = (categories: Category[], type: 'income' | 'expense'): EtatRow[] => {
-    return categories
+  const processData = useCallback((categoriesToProcess: Category[], type: 'income' | 'expense'): EtatRow[] => {
+    return categoriesToProcess
       .filter(c => c.type === type)
       .map((category, index) => {
         const montantRealise = filteredTransactions
           .filter(t => t.categoryId === category.id)
           .reduce((sum, t) => sum + t.amount, 0);
-        
-        const montantPrevu = type === 'income' ? (prevusRecettes[category.id] || 0) : (depensesData.find(d => d.id === category.id)?.montantPrevu || prevusDepenses[category.id] || 0);
+
+        const montantPrevu = type === 'income' ? (prevusRecettes[category.id] || 0) : (prevusDepenses[category.id] || 0);
         const pourcentageRealisation = montantPrevu > 0 ? (montantRealise / montantPrevu) * 100 : (montantRealise > 0 ? 100 : 0);
         const ecart = montantRealise - montantPrevu;
 
@@ -174,10 +174,11 @@ export default function EtatsPage() {
           ecart,
         };
       });
-  };
+  }, [filteredTransactions, prevusRecettes, prevusDepenses]);
 
-  const recettesData = processData(allCategories, 'income');
-  const depensesData = processData(allCategories, 'expense');
+  const recettesData = useMemo(() => processData(allCategories, 'income'), [allCategories, processData]);
+  const depensesData = useMemo(() => processData(allCategories, 'expense'), [allCategories, processData]);
+
 
   const totalRecettesPrevus = recettesData.reduce((sum, row) => sum + row.montantPrevu, 0);
   const totalRecettesRealisees = recettesData.reduce((sum, row) => sum + row.montantRealise, 0);
@@ -210,15 +211,15 @@ export default function EtatsPage() {
         toast({ title: "Chargement", description: "Les paramètres de l'entreprise ne sont pas encore chargés.", variant: "default"});
         return;
     }
-    const doc = new jsPDF({ orientation: 'p', unit: 'mm', format: 'a4' }); 
+    const doc = new jsPDF({ orientation: 'p', unit: 'mm', format: 'a4' });
     const tableCellStyles = { fontSize: 8, cellPadding: 1.5 };
     const tableHeaderStyles = { fillColor: [220, 220, 220], textColor: [0,0,0], fontStyle: 'bold' as const, fontSize: 8, halign: 'center' as const };
-    const pageMargin = 14; 
+    const pageMargin = 14;
 
     let logoStartY = 10;
     let headerTextStartY = logoStartY;
     const logoMaxHeight = 15;
-    const logoMaxWidth = 40; 
+    const logoMaxWidth = 40;
     let actualLogoWidth = 0;
 
     if (settings.companyLogoUrl) {
@@ -226,7 +227,7 @@ export default function EtatsPage() {
             const response = await fetch(settings.companyLogoUrl);
             if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
             const blob = await response.blob();
-            
+
             await new Promise<void>((resolve, reject) => {
                 const reader = new FileReader();
                 reader.onloadend = () => {
@@ -275,8 +276,8 @@ export default function EtatsPage() {
             // PDF will be generated without logo if fetch fails
         }
     }
-    
-    const headerTextX = pageMargin + (actualLogoWidth > 0 ? actualLogoWidth + 5 : 0); 
+
+    const headerTextX = pageMargin + (actualLogoWidth > 0 ? actualLogoWidth + 5 : 0);
     const headerTextWidth = doc.internal.pageSize.getWidth() - headerTextX - pageMargin;
 
 
@@ -284,7 +285,7 @@ export default function EtatsPage() {
     doc.setFont("helvetica", "bold");
     doc.text(settings.companyName || "GESTION CAISSE", headerTextX, headerTextStartY + 5, { align: 'left', maxWidth: headerTextWidth });
     headerTextStartY += 7;
-    
+
     if (settings.companyAddress) {
       doc.setFontSize(8);
       doc.setFont("helvetica", "normal");
@@ -317,49 +318,49 @@ export default function EtatsPage() {
     (doc as any).autoTable({
       head: [['N°', 'Types de recettes', 'Montant Prévu', 'Montant Réalisé', '% Réal.', 'Ecart']],
       body: recettesData.map(r => [
-        r.numero, 
-        r.type, 
-        formatForPdf(r.montantPrevu), 
-        formatForPdf(r.montantRealise), 
-        `${r.pourcentageRealisation.toFixed(0)}%`, 
+        r.numero,
+        r.type,
+        formatForPdf(r.montantPrevu),
+        formatForPdf(r.montantRealise),
+        `${r.pourcentageRealisation.toFixed(0)}%`,
         formatForPdf(r.ecart)
       ]),
       startY: mainContentStartY,
       theme: 'grid',
       headStyles: tableHeaderStyles,
       styles: tableCellStyles,
-      columnStyles: { 
+      columnStyles: {
         0: { cellWidth: 10, halign: 'center' as const },
-        1: { cellWidth: 55 }, 
-        2: { cellWidth: 40, halign: 'right' as const }, 
-        3: { cellWidth: 40, halign: 'right' as const }, 
+        1: { cellWidth: 55 },
+        2: { cellWidth: 40, halign: 'right' as const },
+        3: { cellWidth: 40, halign: 'right' as const },
         4: { cellWidth: 15, halign: 'right' as const },
-        5: { cellWidth: 25, halign: 'right' as const } 
+        5: { cellWidth: 25, halign: 'right' as const }
       },
       margin: { left: pageMargin, right: pageMargin }
     });
     mainContentStartY = (doc as any).lastAutoTable.finalY + 2;
     (doc as any).autoTable({
       body: [[
-        {content: 'Total Recettes', colSpan: 2, styles: {fontStyle: 'bold' as const, halign: 'left' as const}}, 
+        {content: 'Total Recettes', colSpan: 2, styles: {fontStyle: 'bold' as const, halign: 'left' as const}},
         {content: formatForPdf(totalRecettesPrevus), styles: {fontStyle: 'bold' as const, halign: 'right' as const}},
         {content: formatForPdf(totalRecettesRealisees), styles: {fontStyle: 'bold' as const, halign: 'right' as const}},
-        {content: '', styles: {}}, 
-        {content: '', styles: {}}  
+        {content: '', styles: {}}, // Espace pour % Réal.
+        {content: '', styles: {}}  // Espace pour Ecart
       ]],
       startY: mainContentStartY,
       theme: 'grid',
       styles: {...tableCellStyles, fontStyle: 'bold' as const},
-      columnStyles: { 
-        0: { cellWidth: 65 }, 
-        1: { cellWidth: 40 }, 
-        2: { cellWidth: 40 }, 
-        3: { cellWidth: 15 }, 
-        4: { cellWidth: 25 }  
+      columnStyles: {
+        0: { cellWidth: 65 }, // N° + Type de recettes
+        1: { cellWidth: 40 }, // Montant Prévu
+        2: { cellWidth: 40 }, // Montant Réalisé
+        3: { cellWidth: 15 }, // % Réal. (vide)
+        4: { cellWidth: 25 }  // Ecart (vide)
       },
-      didParseCell: function (data: any) { 
+      didParseCell: function (data: any) {
         if (data.row.index === 0 && data.cell.raw.content === 'Total Recettes') {
-             data.cell.colSpan = 2;
+             data.cell.colSpan = 2; // S'étend sur N° et Types
         }
       },
       margin: { left: pageMargin, right: pageMargin }
@@ -373,40 +374,40 @@ export default function EtatsPage() {
     (doc as any).autoTable({
       head: [['N°', 'Types de dépenses', 'Montant Prévu', 'Montant Réalisé', '% Réal.', 'Ecart']],
       body: depensesData.map(d => [
-        d.numero, 
-        d.type, 
-        formatForPdf(d.montantPrevu), 
-        formatForPdf(d.montantRealise), 
-        `${d.pourcentageRealisation.toFixed(0)}%`, 
+        d.numero,
+        d.type,
+        formatForPdf(d.montantPrevu),
+        formatForPdf(d.montantRealise),
+        `${d.pourcentageRealisation.toFixed(0)}%`,
         formatForPdf(d.ecart)
       ]),
       startY: mainContentStartY,
       theme: 'grid',
       headStyles: tableHeaderStyles,
       styles: tableCellStyles,
-      columnStyles: { 
+      columnStyles: {
         0: { cellWidth: 10, halign: 'center' as const },
-        1: { cellWidth: 55 }, 
-        2: { cellWidth: 40, halign: 'right' as const }, 
-        3: { cellWidth: 40, halign: 'right' as const }, 
+        1: { cellWidth: 55 },
+        2: { cellWidth: 40, halign: 'right' as const },
+        3: { cellWidth: 40, halign: 'right' as const },
         4: { cellWidth: 15, halign: 'right' as const },
-        5: { cellWidth: 25, halign: 'right' as const }  
+        5: { cellWidth: 25, halign: 'right' as const }
       },
       margin: { left: pageMargin, right: pageMargin }
     });
     mainContentStartY = (doc as any).lastAutoTable.finalY + 2;
     (doc as any).autoTable({
       body: [[
-        {content: 'Total Dépenses', colSpan: 2, styles: {fontStyle: 'bold' as const, halign: 'left' as const}}, 
+        {content: 'Total Dépenses', colSpan: 2, styles: {fontStyle: 'bold' as const, halign: 'left' as const}},
         {content: formatForPdf(totalDepensesPrevus), styles: {fontStyle: 'bold' as const, halign: 'right' as const}},
         {content: formatForPdf(totalDepensesRealisees), styles: {fontStyle: 'bold' as const, halign: 'right' as const}},
-        {content: '', styles: {}}, 
-        {content: '', styles: {}}  
+        {content: '', styles: {}},
+        {content: '', styles: {}}
       ]],
       startY: mainContentStartY,
       theme: 'grid',
       styles: {...tableCellStyles, fontStyle: 'bold' as const},
-       columnStyles: { 
+       columnStyles: {
         0: { cellWidth: 65 },
         1: { cellWidth: 40 },
         2: { cellWidth: 40 },
@@ -420,22 +421,22 @@ export default function EtatsPage() {
       },
       margin: { left: pageMargin, right: pageMargin }
     });
-    mainContentStartY = (doc as any).lastAutoTable.finalY + 10; 
-    
+    mainContentStartY = (doc as any).lastAutoTable.finalY + 10;
+
     doc.setFontSize(10);
     const availableWidthForBalance = doc.internal.pageSize.getWidth() - (2 * pageMargin);
     (doc as any).autoTable({
         body: [
             [
-             { content: 'BALANCE', styles: { fontStyle: 'bold' as const, halign: 'left' as const, cellWidth: availableWidthForBalance * 0.25 } }, 
-             { content: `Recettes: ${formatForPdf(totalRecettesRealisees)}`, styles: {halign: 'right' as const, cellWidth: availableWidthForBalance * 0.25} }, 
-             { content: `Dépenses: ${formatForPdf(totalDepensesRealisees)}`, styles: {halign: 'right' as const, cellWidth: availableWidthForBalance * 0.25} }, 
-             { content: `Solde: ${formatForPdf(soldeRealise)}`, styles: { fontStyle: 'bold' as const, halign: 'right' as const, cellWidth: availableWidthForBalance * 0.25} }, 
+             { content: 'BALANCE', styles: { fontStyle: 'bold' as const, halign: 'left' as const, cellWidth: availableWidthForBalance * 0.25 } },
+             { content: `Recettes: ${formatForPdf(totalRecettesRealisees)}`, styles: {halign: 'right' as const, cellWidth: availableWidthForBalance * 0.25} },
+             { content: `Dépenses: ${formatForPdf(totalDepensesRealisees)}`, styles: {halign: 'right' as const, cellWidth: availableWidthForBalance * 0.25} },
+             { content: `Solde: ${formatForPdf(soldeRealise)}`, styles: { fontStyle: 'bold' as const, halign: 'right' as const, cellWidth: availableWidthForBalance * 0.25} },
             ]
         ],
         startY: mainContentStartY,
-        theme: 'plain', 
-        styles: {...tableCellStyles, fontStyle: 'bold' as const, cellPadding: 2 }, 
+        theme: 'plain',
+        styles: {...tableCellStyles, fontStyle: 'bold' as const, cellPadding: 2 },
         tableWidth: 'auto',
         margin: { left: pageMargin, right: pageMargin },
         didDrawPage: (data: any) => {
@@ -447,7 +448,7 @@ export default function EtatsPage() {
                 settings.rccm ? `RCCM: ${settings.rccm}` : '',
                 settings.niu ? `NIU: ${settings.niu}` : '',
             ].filter(Boolean);
-            
+
             doc.text(footerTextParts.join(' | '), pageMargin, doc.internal.pageSize.getHeight() - 10);
             if (settings.companyContact) {
                  doc.text(`Contact: ${settings.companyContact}`, pageMargin, doc.internal.pageSize.getHeight() - 6);
@@ -465,14 +466,14 @@ export default function EtatsPage() {
         return;
     }
     const wb = XLSX.utils.book_new();
-    
-    const headerXlsx: any[][] = [ 
+
+    const headerXlsx: any[][] = [
       [settings.companyName || "GESTION CAISSE"],
       ...(settings.companyAddress ? [[settings.companyAddress]] : []),
       ...(settings.companyContact ? [[`Contact: ${settings.companyContact}`]] : []),
       [etatTitle.toUpperCase()],
       [`Date d'export: ${currentPrintDate}`],
-      [], 
+      [],
     ];
 
     const wsDataRecettes = recettesData.map(r => ({
@@ -480,15 +481,15 @@ export default function EtatsPage() {
       "Types de recettes": r.type,
       "Montant Prévu": r.montantPrevu,
       "Montant Réalisé": r.montantRealise,
-      "% Réal.": r.pourcentageRealisation / 100, 
+      "% Réal.": r.pourcentageRealisation / 100,
       "Ecart": r.ecart,
     }));
     wsDataRecettes.push({
-      "N°": "", "Types de recettes": "Total Recettes", 
-      "Montant Prévu": totalRecettesPrevus, "Montant Réalisé": totalRecettesRealisees, 
+      "N°": "", "Types de recettes": "Total Recettes",
+      "Montant Prévu": totalRecettesPrevus, "Montant Réalisé": totalRecettesRealisees,
       "% Réal.": null as any, "Ecart": null as any
     });
-    
+
     const wsDataDepenses = depensesData.map(d => ({
       "N°": d.numero,
       "Types de dépenses": d.type,
@@ -498,14 +499,14 @@ export default function EtatsPage() {
       "Ecart": d.ecart,
     }));
     wsDataDepenses.push({
-      "N°": "", "Types de dépenses": "Total Dépenses", 
-      "Montant Prévu": totalDepensesPrevus, "Montant Réalisé": totalDepensesRealisees, 
+      "N°": "", "Types de dépenses": "Total Dépenses",
+      "Montant Prévu": totalDepensesPrevus, "Montant Réalisé": totalDepensesRealisees,
       "% Réal.": null as any, "Ecart": null as any
     });
 
-    const wsSummary: any[][] = [ 
-      [], 
-      ["BALANCE"], 
+    const wsSummary: any[][] = [
+      [],
+      ["BALANCE"],
       ["Total Recettes Réalisées", totalRecettesRealisees],
       ["Total Dépenses Réalisées", totalDepensesRealisees],
       ["Solde", soldeRealise]
@@ -519,60 +520,60 @@ export default function EtatsPage() {
         ].filter(Boolean).join(' | ')
     ];
 
-    const ws = XLSX.utils.aoa_to_sheet(headerXlsx); 
+    const ws = XLSX.utils.aoa_to_sheet(headerXlsx);
     const recettesStartRow = headerXlsx.length + 1;
     XLSX.utils.sheet_add_aoa(ws, [["I- LES RECETTES"]], {origin: `A${recettesStartRow}`});
     XLSX.utils.sheet_add_json(ws, wsDataRecettes, {origin: `A${recettesStartRow + 1}`, skipHeader: false});
-    
+
     const depensesStartRow = recettesStartRow + 1 + wsDataRecettes.length + 1;
-    XLSX.utils.sheet_add_aoa(ws, [["II- LES DEPENSES"]], {origin: {r: depensesStartRow -1 , c: 0}}); 
-    XLSX.utils.sheet_add_json(ws, wsDataDepenses, {origin: {r: depensesStartRow, c: 0}, skipHeader: false}); 
-    
+    XLSX.utils.sheet_add_aoa(ws, [["II- LES DEPENSES"]], {origin: {r: depensesStartRow -1 , c: 0}});
+    XLSX.utils.sheet_add_json(ws, wsDataDepenses, {origin: {r: depensesStartRow, c: 0}, skipHeader: false});
+
     const summaryStartRow = depensesStartRow + wsDataDepenses.length + 1;
     XLSX.utils.sheet_add_aoa(ws, wsSummary, {origin: {r: summaryStartRow -1, c:0}, skipHeader: true});
     XLSX.utils.sheet_add_aoa(ws, footerXlsx, { origin: -1 });
 
 
-    ws['!cols'] = [{wch:5}, {wch:35}, {wch:18}, {wch:18}, {wch:10}, {wch:18}]; 
-    
+    ws['!cols'] = [{wch:5}, {wch:35}, {wch:18}, {wch:18}, {wch:10}, {wch:18}];
+
     const currencyFormat = '#,##0 "F CFA"';
     const percentageFormat = '0%';
 
     for (let i = 0; i < wsDataRecettes.length; i++) {
-        const rowIndex = recettesStartRow + 1 + i; 
-        if (ws[`C${rowIndex}`]) ws[`C${rowIndex}`].z = currencyFormat; 
-        if (ws[`D${rowIndex}`]) ws[`D${rowIndex}`].z = currencyFormat; 
-        if (ws[`E${rowIndex}`] && wsDataRecettes[i]["% Réal."] !== null) ws[`E${rowIndex}`].z = percentageFormat; 
-        if (ws[`F${rowIndex}`] && wsDataRecettes[i]["Ecart"] !== null) ws[`F${rowIndex}`].z = currencyFormat; 
+        const rowIndex = recettesStartRow + 1 + i;
+        if (ws[`C${rowIndex}`]) ws[`C${rowIndex}`].z = currencyFormat;
+        if (ws[`D${rowIndex}`]) ws[`D${rowIndex}`].z = currencyFormat;
+        if (ws[`E${rowIndex}`] && wsDataRecettes[i]["% Réal."] !== null) ws[`E${rowIndex}`].z = percentageFormat;
+        if (ws[`F${rowIndex}`] && wsDataRecettes[i]["Ecart"] !== null) ws[`F${rowIndex}`].z = currencyFormat;
     }
     for (let i = 0; i < wsDataDepenses.length; i++) {
-        const rowIndex = depensesStartRow + 1 + i; 
+        const rowIndex = depensesStartRow + 1 + i;
         if (ws[`C${rowIndex}`]) ws[`C${rowIndex}`].z = currencyFormat;
         if (ws[`D${rowIndex}`]) ws[`D${rowIndex}`].z = currencyFormat;
         if (ws[`E${rowIndex}`] && wsDataDepenses[i]["% Réal."] !== null) ws[`E${rowIndex}`].z = percentageFormat;
         if (ws[`F${rowIndex}`] && wsDataDepenses[i]["Ecart"] !== null) ws[`F${rowIndex}`].z = currencyFormat;
     }
-    
-    const balanceDataStartRow = summaryStartRow + 1; 
-    if (ws[`B${balanceDataStartRow}`]) ws[`B${balanceDataStartRow}`].z = currencyFormat; 
-    if (ws[`B${balanceDataStartRow + 1}`]) ws[`B${balanceDataStartRow + 1}`].z = currencyFormat; 
-    if (ws[`B${balanceDataStartRow + 2}`]) ws[`B${balanceDataStartRow + 2}`].z = currencyFormat; 
+
+    const balanceDataStartRow = summaryStartRow + 1;
+    if (ws[`B${balanceDataStartRow}`]) ws[`B${balanceDataStartRow}`].z = currencyFormat;
+    if (ws[`B${balanceDataStartRow + 1}`]) ws[`B${balanceDataStartRow + 1}`].z = currencyFormat;
+    if (ws[`B${balanceDataStartRow + 2}`]) ws[`B${balanceDataStartRow + 2}`].z = currencyFormat;
 
     if(!ws['!merges']) ws['!merges'] = [];
     const maxColIndexXlsx = ws['!cols']!.length -1;
     headerXlsx.forEach((row, rowIndex) => {
-       if (row.length === 1 && rowIndex < headerXlsx.length -1 ) { 
+       if (row.length === 1 && rowIndex < headerXlsx.length -1 ) {
              ws['!merges']?.push({s: {r:rowIndex, c:0}, e: {r:rowIndex, c:maxColIndexXlsx}});
         }
     });
-    ws['!merges'].push({s: {r:recettesStartRow-1, c:0}, e: {r:recettesStartRow-1, c:maxColIndexXlsx}}); 
-    ws['!merges'].push({s: {r:depensesStartRow -1, c:0}, e: {r:depensesStartRow -1, c:maxColIndexXlsx}}); 
-    ws['!merges'].push({s: {r:summaryStartRow -1, c:0}, e: {r:summaryStartRow -1, c:maxColIndexXlsx}}); 
+    ws['!merges'].push({s: {r:recettesStartRow-1, c:0}, e: {r:recettesStartRow-1, c:maxColIndexXlsx}});
+    ws['!merges'].push({s: {r:depensesStartRow -1, c:0}, e: {r:depensesStartRow -1, c:maxColIndexXlsx}});
+    ws['!merges'].push({s: {r:summaryStartRow -1, c:0}, e: {r:summaryStartRow -1, c:maxColIndexXlsx}});
     const footerRowIndexXlsx = headerXlsx.length + 1 + wsDataRecettes.length + 1 + wsDataDepenses.length + 1 + wsSummary.length + 1;
      if (footerXlsx[1] && footerXlsx[1].length === 1) {
         ws['!merges']?.push({ s: { r: footerRowIndexXlsx, c: 0 }, e: { r: footerRowIndexXlsx, c: maxColIndexXlsx } });
      }
-    
+
     XLSX.utils.book_append_sheet(wb, ws, "Etat de Caisse");
     XLSX.writeFile(wb, `etat_de_caisse_${format(new Date(), 'yyyyMMddHHmm')}.xlsx`);
   };
@@ -617,13 +618,13 @@ export default function EtatsPage() {
                     onBlur={() => handleSaveBudget(row.id, type)}
                     className="w-full sm:w-32 text-right print:border-none print:bg-transparent print:p-0 print:input-as-text"
                     placeholder="0"
-                    disabled={isLoadingBudgets || isLoadingSettings} 
+                    disabled={isLoadingBudgets || isLoadingSettings}
                   />
                 </TableCell>
                 <TableCell className="text-right print:text-black">{formatCurrencyCFA(row.montantRealise)}</TableCell>
                 <TableCell className="text-right print:text-black w-32">
-                  <Progress 
-                    value={row.montantPrevu > 0 ? Math.min((row.montantRealise / row.montantPrevu) * 100, 100) : (row.montantRealise > 0 ? 100 : 0)} 
+                  <Progress
+                    value={row.montantPrevu > 0 ? Math.min((row.montantRealise / row.montantPrevu) * 100, 100) : (row.montantRealise > 0 ? 100 : 0)}
                     className="h-2 print:hidden"
                     aria-label={`Progression ${row.type}`}
                   />
@@ -653,10 +654,10 @@ export default function EtatsPage() {
      <div className="print:block hidden my-4 text-center">
         {settings && settings.companyLogoUrl && (
           <div className="flex justify-start items-start mb-2">
-            <img 
-              src={settings.companyLogoUrl} 
-              alt="Logo Entreprise" 
-              className="h-16 w-auto max-w-[150px] object-contain mr-4" 
+            <img
+              src={settings.companyLogoUrl}
+              alt="Logo Entreprise"
+              className="h-16 w-auto max-w-[150px] object-contain mr-4"
               data-ai-hint="company logo"
             />
             <div className="text-left">
@@ -685,7 +686,7 @@ export default function EtatsPage() {
   );
 
   const isLoadingPage = isLoadingCategories || isLoadingTransactions || isLoadingSettings || isLoadingBudgets;
-  const globalError = errorCategoriesHook || errorTransactions || budgetError; 
+  const globalError = errorCategoriesHook || errorTransactions || budgetError;
 
   if (isLoadingPage && !filteredTransactions.length && !allCategories.length && !budgets.length) {
     return (
@@ -695,7 +696,7 @@ export default function EtatsPage() {
     );
   }
 
-  if (globalError && !isLoadingPage) { 
+  if (globalError && !isLoadingPage) {
     return (
       <div className="text-center text-destructive py-10">
         <p>Erreur de chargement des données: {globalError}</p>
@@ -717,7 +718,7 @@ export default function EtatsPage() {
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button className="w-full sm:w-auto" disabled={isLoadingSettings || isLoadingBudgets}>
-                {(isLoadingSettings || isLoadingBudgets) ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Download className="mr-2 h-4 w-4" />} 
+                {(isLoadingSettings || isLoadingBudgets) ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Download className="mr-2 h-4 w-4" />}
                 Exporter <ChevronDown className="ml-2 h-4 w-4" />
               </Button>
             </DropdownMenuTrigger>
@@ -765,8 +766,8 @@ export default function EtatsPage() {
           </div>
         </CardContent>
       </Card>
-      
-      {(isLoadingCategories || isLoadingBudgets) && (!recettesData.length && !depensesData.length) ? ( 
+
+      {(isLoadingCategories || isLoadingBudgets) && (!recettesData.length && !depensesData.length) ? (
         <div className="flex justify-center items-center h-24"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>
       ) : (
         <>
@@ -805,3 +806,4 @@ export default function EtatsPage() {
     </div>
   );
 }
+
