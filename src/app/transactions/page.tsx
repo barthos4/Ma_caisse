@@ -32,13 +32,15 @@ export default function TransactionsPage() {
 
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
+  const [deletingTransactionId, setDeletingTransactionId] = useState<string | null>(null);
+
 
   const [searchTerm, setSearchTerm] = useState("");
   const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
   const debouncedSearchTerm = useDebounce(searchTerm, 500);
 
   useEffect(() => {
-    fetchCategoriesHook(); // Load categories for the form
+    fetchCategoriesHook(); 
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -67,12 +69,19 @@ export default function TransactionsPage() {
   
   const handleDeleteTransaction = async (id: string) => {
     if (confirm("Êtes-vous sûr de vouloir supprimer cette transaction ?")) {
-      const success = await deleteTransaction(id);
-      if (success) {
-        toast({ title: "Succès", description: "Transaction supprimée." });
-        // fetchTransactions(); // Re-fetch already handled by the hook or filter useEffect
-      } else {
-        toast({ title: "Erreur", description: errorTransactions || "Impossible de supprimer la transaction.", variant: "destructive" });
+      setDeletingTransactionId(id);
+      try {
+        const success = await deleteTransaction(id);
+        if (success) {
+          toast({ title: "Succès", description: "Transaction supprimée." });
+          // fetchTransactions(); // Re-fetch handled by filter useEffect
+        } else {
+          toast({ title: "Erreur", description: errorTransactions || "Impossible de supprimer la transaction.", variant: "destructive" });
+        }
+      } catch (error) {
+        toast({ title: "Erreur", description: "Une erreur est survenue lors de la suppression.", variant: "destructive" });
+      } finally {
+        setDeletingTransactionId(null);
       }
     }
   };
@@ -84,7 +93,7 @@ export default function TransactionsPage() {
   const handleFormSubmit = () => {
     setIsFormOpen(false);
     setEditingTransaction(null);
-    // fetchTransactions(); // Re-fetch is handled by the hook or filter useEffect
+    // fetchTransactions(); // Re-fetch is handled by the filter useEffect
   };
 
   const clearFilters = () => {
@@ -208,11 +217,11 @@ export default function TransactionsPage() {
                       {transaction.type === 'income' ? '+' : '-'}{formatCurrencyCFA(transaction.amount)}
                     </TableCell>
                     <TableCell className="text-right">
-                      <Button variant="ghost" size="icon" onClick={() => handleEditTransaction(transaction)} className="mr-1" aria-label="Modifier">
+                      <Button variant="ghost" size="icon" onClick={() => handleEditTransaction(transaction)} className="mr-1" aria-label="Modifier" disabled={deletingTransactionId === transaction.id}>
                         <Edit2 className="h-4 w-4" />
                       </Button>
-                      <Button variant="ghost" size="icon" onClick={() => handleDeleteTransaction(transaction.id)} className="text-destructive hover:text-destructive" aria-label="Supprimer">
-                        <Trash2 className="h-4 w-4" />
+                      <Button variant="ghost" size="icon" onClick={() => handleDeleteTransaction(transaction.id)} className="text-destructive hover:text-destructive" aria-label="Supprimer" disabled={deletingTransactionId === transaction.id}>
+                        {deletingTransactionId === transaction.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
                       </Button>
                     </TableCell>
                   </TableRow>
@@ -225,3 +234,4 @@ export default function TransactionsPage() {
     </div>
   );
 }
+

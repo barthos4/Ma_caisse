@@ -41,10 +41,12 @@ export default function EtatsPage() {
   const { transactions, isLoading: isLoadingTransactions, error: errorTransactions, fetchTransactions } = useTransactions();
   const { categories: allCategories, isLoading: isLoadingCategories, error: errorCategoriesHook, fetchCategories: fetchCategoriesHook } = useCategories();
   const { settings, isLoading: isLoadingSettings, fetchSettings: fetchSettingsHook } = useSettings();
-  const { budgets, fetchBudgetsForPeriod, upsertBudget, isLoadingBudgets, budgetError } = useBudgets();
+  const { budgets, fetchBudgetsForPeriod, upsertBudget, isLoading: isLoadingBudgets, budgetError } = useBudgets();
   const { toast } = useToast();
 
   const [currentPrintDate, setCurrentPrintDate] = useState("");
+  const [isExportingPDF, setIsExportingPDF] = useState(false);
+  const [isExportingXLSX, setIsExportingXLSX] = useState(false);
 
   const [dateRange, setDateRange] = useState<DateRange | undefined>({
     from: startOfMonth(new Date()),
@@ -216,253 +218,267 @@ export default function EtatsPage() {
         toast({ title: "Chargement", description: "Les paramètres de l'entreprise ne sont pas encore chargés.", variant: "default"});
         return;
     }
-    const doc = new jsPDF({ orientation: 'p', unit: 'mm', format: 'a4' });
-    const tableCellStyles = { fontSize: 8, cellPadding: 1.5 };
-    const tableHeaderStyles = { fillColor: [220, 220, 220], textColor: [0,0,0], fontStyle: 'bold' as const, fontSize: 8, halign: 'center' as const };
-    const pageMargin = 14;
+    if (isExportingPDF) return;
+    setIsExportingPDF(true);
 
-    let logoStartY = 10;
-    let headerTextStartY = logoStartY;
-    const logoMaxHeight = 15;
-    const logoMaxWidth = 40;
-    let actualLogoWidth = 0;
+    try {
+      const doc = new jsPDF({ orientation: 'p', unit: 'mm', format: 'a4' });
+      const tableCellStyles = { fontSize: 8, cellPadding: 1.5 };
+      const tableHeaderStyles = { fillColor: [220, 220, 220], textColor: [0,0,0], fontStyle: 'bold' as const, fontSize: 8, halign: 'center' as const };
+      const pageMargin = 14;
 
-    if (settings.companyLogoUrl) {
-        try {
-            const response = await fetch(settings.companyLogoUrl);
-            if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-            const blob = await response.blob();
+      let logoStartY = 10;
+      let headerTextStartY = logoStartY;
+      const logoMaxHeight = 15;
+      const logoMaxWidth = 40;
+      let actualLogoWidth = 0;
 
-            await new Promise<void>((resolve, reject) => {
-                const reader = new FileReader();
-                reader.onloadend = () => {
-                    if (reader.error) {
-                        console.error("Erreur FileReader (Etats):", reader.error);
-                        reject(reader.error);
-                        return;
-                    }
-                    try {
-                        const img = new Image();
-                        img.onload = () => {
-                            let w = img.width;
-                            let h = img.height;
-                            const ratio = w / h;
+      if (settings.companyLogoUrl) {
+          try {
+              const response = await fetch(settings.companyLogoUrl);
+              if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+              const blob = await response.blob();
 
-                            if (w > logoMaxWidth) {
-                                w = logoMaxWidth;
-                                h = w / ratio;
-                            }
-                            if (h > logoMaxHeight) {
-                                h = logoMaxHeight;
-                                w = h * ratio;
-                            }
-                            actualLogoWidth = w;
-                            doc.addImage(reader.result as string, 'PNG', pageMargin, logoStartY, w, h);
-                            resolve();
-                        };
-                        img.onerror = (imgError) => {
-                             console.error("Erreur de chargement de l'image du logo (Etats):", imgError);
-                             reject(imgError);
-                        }
-                        img.src = reader.result as string;
-                    } catch (imgError) {
-                         console.error("Erreur doc.addImage (Etats):", imgError);
-                         reject(imgError);
-                    }
-                };
-                reader.onerror = (error) => {
-                    console.error("Erreur onerror FileReader (Etats):", error);
-                    reject(error);
-                };
-                reader.readAsDataURL(blob);
-            });
-        } catch (error) {
-            console.error("Erreur de chargement du logo pour PDF (Etats):", error);
-            // PDF will be generated without logo if fetch fails
-        }
-    }
+              await new Promise<void>((resolve, reject) => {
+                  const reader = new FileReader();
+                  reader.onloadend = () => {
+                      if (reader.error) {
+                          console.error("Erreur FileReader (Etats):", reader.error);
+                          reject(reader.error);
+                          return;
+                      }
+                      try {
+                          const img = new Image();
+                          img.onload = () => {
+                              let w = img.width;
+                              let h = img.height;
+                              const ratio = w / h;
 
-    const headerTextX = pageMargin + (actualLogoWidth > 0 ? actualLogoWidth + 5 : 0);
-    const headerTextWidth = doc.internal.pageSize.getWidth() - headerTextX - pageMargin;
+                              if (w > logoMaxWidth) {
+                                  w = logoMaxWidth;
+                                  h = w / ratio;
+                              }
+                              if (h > logoMaxHeight) {
+                                  h = logoMaxHeight;
+                                  w = h * ratio;
+                              }
+                              actualLogoWidth = w;
+                              doc.addImage(reader.result as string, 'PNG', pageMargin, logoStartY, w, h);
+                              resolve();
+                          };
+                          img.onerror = (imgError) => {
+                              console.error("Erreur de chargement de l'image du logo (Etats):", imgError);
+                              reject(imgError);
+                          }
+                          img.src = reader.result as string;
+                      } catch (imgError) {
+                          console.error("Erreur doc.addImage (Etats):", imgError);
+                          reject(imgError);
+                      }
+                  };
+                  reader.onerror = (error) => {
+                      console.error("Erreur onerror FileReader (Etats):", error);
+                      reject(error);
+                  };
+                  reader.readAsDataURL(blob);
+              });
+          } catch (error) {
+              console.error("Erreur de chargement du logo pour PDF (Etats):", error);
+              // PDF will be generated without logo if fetch fails
+          }
+      }
+
+      const headerTextX = pageMargin + (actualLogoWidth > 0 ? actualLogoWidth + 5 : 0);
+      const headerTextWidth = doc.internal.pageSize.getWidth() - headerTextX - pageMargin;
 
 
-    doc.setFontSize(14);
-    doc.setFont("helvetica", "bold");
-    doc.text(settings.companyName || "GESTION CAISSE", headerTextX, headerTextStartY + 5, { align: 'left', maxWidth: headerTextWidth });
-    headerTextStartY += 7;
+      doc.setFontSize(14);
+      doc.setFont("helvetica", "bold");
+      doc.text(settings.companyName || "GESTION CAISSE", headerTextX, headerTextStartY + 5, { align: 'left', maxWidth: headerTextWidth });
+      headerTextStartY += 7;
 
-    if (settings.companyAddress) {
-      doc.setFontSize(8);
+      if (settings.companyAddress) {
+        doc.setFontSize(8);
+        doc.setFont("helvetica", "normal");
+        doc.text(settings.companyAddress, headerTextX, headerTextStartY, { align: 'left', maxWidth: headerTextWidth });
+        headerTextStartY += 4;
+      }
+      // Removed contact from header for PDF to put in footer
+      // if (settings.companyContact) {
+      // doc.setFontSize(8);
+      // doc.setFont("helvetica", "normal");
+      // doc.text(`Contact: ${settings.companyContact}`, headerTextX, headerTextStartY, { align: 'left', maxWidth: headerTextWidth });
+      // headerTextStartY +=4;
+      // }
+
+      let mainContentStartY = Math.max(logoStartY + logoMaxHeight + 5, headerTextStartY + 5);
+
+
+      doc.setFontSize(12);
+      doc.setFont("helvetica", "bold");
+      doc.text(etatTitle, doc.internal.pageSize.getWidth() / 2, mainContentStartY, { align: 'center' });
+      mainContentStartY += 7;
+      doc.setFontSize(9);
       doc.setFont("helvetica", "normal");
-      doc.text(settings.companyAddress, headerTextX, headerTextStartY, { align: 'left', maxWidth: headerTextWidth });
-      headerTextStartY += 4;
-    }
-     if (settings.companyContact) {
-      doc.setFontSize(8);
-      doc.setFont("helvetica", "normal");
-      doc.text(`Contact: ${settings.companyContact}`, headerTextX, headerTextStartY, { align: 'left', maxWidth: headerTextWidth });
-      headerTextStartY +=4;
-    }
+      doc.text(`Date d'export: ${currentPrintDate}`, doc.internal.pageSize.getWidth() / 2, mainContentStartY, { align: 'center' });
+      mainContentStartY += 7;
 
-    let mainContentStartY = Math.max(logoStartY + logoMaxHeight + 5, headerTextStartY + 5);
-
-
-    doc.setFontSize(12);
-    doc.setFont("helvetica", "bold");
-    doc.text(etatTitle, doc.internal.pageSize.getWidth() / 2, mainContentStartY, { align: 'center' });
-    mainContentStartY += 7;
-    doc.setFontSize(9);
-    doc.setFont("helvetica", "normal");
-    doc.text(`Date d'export: ${currentPrintDate}`, doc.internal.pageSize.getWidth() / 2, mainContentStartY, { align: 'center' });
-    mainContentStartY += 7;
-
-    doc.setFontSize(10);
-    doc.setFont("helvetica", "bold");
-    doc.text("I- LES RECETTES", pageMargin, mainContentStartY);
-    mainContentStartY += 5;
-    (doc as any).autoTable({
-      head: [['N°', 'Types de recettes', 'Montant Prévu', 'Montant Réalisé', '% Réal.', 'Ecart']],
-      body: recettesData.map(r => [
-        r.numero,
-        r.type,
-        formatForPdf(r.montantPrevu),
-        formatForPdf(r.montantRealise),
-        `${r.pourcentageRealisation.toFixed(0)}%`,
-        formatForPdf(r.ecart)
-      ]),
-      startY: mainContentStartY,
-      theme: 'grid',
-      headStyles: tableHeaderStyles,
-      styles: tableCellStyles,
-      columnStyles: {
-        0: { cellWidth: 10, halign: 'center' as const },
-        1: { cellWidth: 55 },
-        2: { cellWidth: 40, halign: 'right' as const },
-        3: { cellWidth: 40, halign: 'right' as const },
-        4: { cellWidth: 15, halign: 'right' as const },
-        5: { cellWidth: 25, halign: 'right' as const }
-      },
-      margin: { left: pageMargin, right: pageMargin }
-    });
-    mainContentStartY = (doc as any).lastAutoTable.finalY + 2;
-    (doc as any).autoTable({
-      body: [[
-        {content: 'Total Recettes', colSpan: 2, styles: {fontStyle: 'bold' as const, halign: 'left' as const}},
-        {content: formatForPdf(totalRecettesPrevus), styles: {fontStyle: 'bold' as const, halign: 'right' as const}},
-        {content: formatForPdf(totalRecettesRealisees), styles: {fontStyle: 'bold' as const, halign: 'right' as const}},
-        {content: '', styles: {}}, 
-        {content: '', styles: {}}  
-      ]],
-      startY: mainContentStartY,
-      theme: 'grid',
-      styles: {...tableCellStyles, fontStyle: 'bold' as const},
-      columnStyles: {
-        0: { cellWidth: 65 }, 
-        1: { cellWidth: 40 }, 
-        2: { cellWidth: 40 }, 
-        3: { cellWidth: 15 }, 
-        4: { cellWidth: 25 }  
-      },
-      didParseCell: function (data: any) {
-        if (data.row.index === 0 && data.cell.raw.content === 'Total Recettes') {
-             data.cell.colSpan = 2; 
-        }
-      },
-      margin: { left: pageMargin, right: pageMargin }
-    });
-    mainContentStartY = (doc as any).lastAutoTable.finalY + 8;
-
-    doc.setFontSize(10);
-    doc.setFont("helvetica", "bold");
-    doc.text("II- LES DEPENSES", pageMargin, mainContentStartY);
-    mainContentStartY += 5;
-    (doc as any).autoTable({
-      head: [['N°', 'Types de dépenses', 'Montant Prévu', 'Montant Réalisé', '% Réal.', 'Ecart']],
-      body: depensesData.map(d => [
-        d.numero,
-        d.type,
-        formatForPdf(d.montantPrevu),
-        formatForPdf(d.montantRealise),
-        `${d.pourcentageRealisation.toFixed(0)}%`,
-        formatForPdf(d.ecart)
-      ]),
-      startY: mainContentStartY,
-      theme: 'grid',
-      headStyles: tableHeaderStyles,
-      styles: tableCellStyles,
-      columnStyles: {
-        0: { cellWidth: 10, halign: 'center' as const },
-        1: { cellWidth: 55 },
-        2: { cellWidth: 40, halign: 'right' as const },
-        3: { cellWidth: 40, halign: 'right' as const },
-        4: { cellWidth: 15, halign: 'right' as const },
-        5: { cellWidth: 25, halign: 'right' as const }
-      },
-      margin: { left: pageMargin, right: pageMargin }
-    });
-    mainContentStartY = (doc as any).lastAutoTable.finalY + 2;
-    (doc as any).autoTable({
-      body: [[
-        {content: 'Total Dépenses', colSpan: 2, styles: {fontStyle: 'bold' as const, halign: 'left' as const}},
-        {content: formatForPdf(totalDepensesPrevus), styles: {fontStyle: 'bold' as const, halign: 'right' as const}},
-        {content: formatForPdf(totalDepensesRealisees), styles: {fontStyle: 'bold' as const, halign: 'right' as const}},
-        {content: '', styles: {}},
-        {content: '', styles: {}}
-      ]],
-      startY: mainContentStartY,
-      theme: 'grid',
-      styles: {...tableCellStyles, fontStyle: 'bold' as const},
-       columnStyles: {
-        0: { cellWidth: 65 },
-        1: { cellWidth: 40 },
-        2: { cellWidth: 40 },
-        3: { cellWidth: 15 },
-        4: { cellWidth: 25 }
-      },
-      didParseCell: function (data: any) {
-        if (data.row.index === 0 && data.cell.raw.content === 'Total Dépenses') {
-             data.cell.colSpan = 2;
-        }
-      },
-      margin: { left: pageMargin, right: pageMargin }
-    });
-    mainContentStartY = (doc as any).lastAutoTable.finalY + 10;
-
-    doc.setFontSize(10);
-    const availableWidthForBalance = doc.internal.pageSize.getWidth() - (2 * pageMargin);
-    (doc as any).autoTable({
-        body: [
-            [
-             { content: 'BALANCE', styles: { fontStyle: 'bold' as const, halign: 'left' as const, cellWidth: availableWidthForBalance * 0.25 } },
-             { content: `Recettes: ${formatForPdf(totalRecettesRealisees)}`, styles: {halign: 'right' as const, cellWidth: availableWidthForBalance * 0.25} },
-             { content: `Dépenses: ${formatForPdf(totalDepensesRealisees)}`, styles: {halign: 'right' as const, cellWidth: availableWidthForBalance * 0.25} },
-             { content: `Solde: ${formatForPdf(soldeRealise)}`, styles: { fontStyle: 'bold' as const, halign: 'right' as const, cellWidth: availableWidthForBalance * 0.25} },
-            ]
-        ],
+      doc.setFontSize(10);
+      doc.setFont("helvetica", "bold");
+      doc.text("I- LES RECETTES", pageMargin, mainContentStartY);
+      mainContentStartY += 5;
+      (doc as any).autoTable({
+        head: [['N°', 'Types de recettes', 'Montant Prévu', 'Montant Réalisé', '% Réal.', 'Ecart']],
+        body: recettesData.map(r => [
+          r.numero,
+          r.type,
+          formatForPdf(r.montantPrevu),
+          formatForPdf(r.montantRealise),
+          `${r.pourcentageRealisation.toFixed(0)}%`,
+          formatForPdf(r.ecart)
+        ]),
         startY: mainContentStartY,
-        theme: 'plain',
-        styles: {...tableCellStyles, fontStyle: 'bold' as const, cellPadding: 2 },
-        tableWidth: 'auto',
-        margin: { left: pageMargin, right: pageMargin },
-        didDrawPage: (data: any) => {
-            const pageCount = doc.internal.getNumberOfPages();
-            doc.setFontSize(8);
-            doc.setFont("helvetica", "normal");
-            const pageInfo = `Page ${data.pageNumber} sur ${pageCount}`;
-            const footerTextParts = [
-                settings.rccm ? `RCCM: ${settings.rccm}` : '',
-                settings.niu ? `NIU: ${settings.niu}` : '',
-            ].filter(Boolean);
+        theme: 'grid',
+        headStyles: tableHeaderStyles,
+        styles: tableCellStyles,
+        columnStyles: {
+          0: { cellWidth: 10, halign: 'center' as const },
+          1: { cellWidth: 55 },
+          2: { cellWidth: 40, halign: 'right' as const },
+          3: { cellWidth: 40, halign: 'right' as const },
+          4: { cellWidth: 15, halign: 'right' as const },
+          5: { cellWidth: 25, halign: 'right' as const }
+        },
+        margin: { left: pageMargin, right: pageMargin }
+      });
+      mainContentStartY = (doc as any).lastAutoTable.finalY + 2;
+      (doc as any).autoTable({
+        body: [[
+          {content: 'Total Recettes', colSpan: 2, styles: {fontStyle: 'bold' as const, halign: 'left' as const}},
+          {content: formatForPdf(totalRecettesPrevus), styles: {fontStyle: 'bold' as const, halign: 'right' as const}},
+          {content: formatForPdf(totalRecettesRealisees), styles: {fontStyle: 'bold' as const, halign: 'right' as const}},
+          {content: '', styles: {}}, 
+          {content: '', styles: {}}  
+        ]],
+        startY: mainContentStartY,
+        theme: 'grid',
+        styles: {...tableCellStyles, fontStyle: 'bold' as const},
+        columnStyles: {
+          0: { cellWidth: 65 }, 
+          1: { cellWidth: 40 }, 
+          2: { cellWidth: 40 }, 
+          3: { cellWidth: 15 }, 
+          4: { cellWidth: 25 }  
+        },
+        didParseCell: function (data: any) {
+          if (data.row.index === 0 && data.cell.raw.content === 'Total Recettes') {
+              data.cell.colSpan = 2; 
+          }
+        },
+        margin: { left: pageMargin, right: pageMargin }
+      });
+      mainContentStartY = (doc as any).lastAutoTable.finalY + 8;
 
-            doc.text(footerTextParts.join(' | '), pageMargin, doc.internal.pageSize.getHeight() - 10);
-            if (settings.companyContact) {
-                 doc.text(`Contact: ${settings.companyContact}`, pageMargin, doc.internal.pageSize.getHeight() - 6);
-            }
-            doc.text(pageInfo, doc.internal.pageSize.getWidth() - pageMargin - doc.getTextWidth(pageInfo), doc.internal.pageSize.getHeight() - 10);
-        }
-    });
+      doc.setFontSize(10);
+      doc.setFont("helvetica", "bold");
+      doc.text("II- LES DEPENSES", pageMargin, mainContentStartY);
+      mainContentStartY += 5;
+      (doc as any).autoTable({
+        head: [['N°', 'Types de dépenses', 'Montant Prévu', 'Montant Réalisé', '% Réal.', 'Ecart']],
+        body: depensesData.map(d => [
+          d.numero,
+          d.type,
+          formatForPdf(d.montantPrevu),
+          formatForPdf(d.montantRealise),
+          `${d.pourcentageRealisation.toFixed(0)}%`,
+          formatForPdf(d.ecart)
+        ]),
+        startY: mainContentStartY,
+        theme: 'grid',
+        headStyles: tableHeaderStyles,
+        styles: tableCellStyles,
+        columnStyles: {
+          0: { cellWidth: 10, halign: 'center' as const },
+          1: { cellWidth: 55 },
+          2: { cellWidth: 40, halign: 'right' as const },
+          3: { cellWidth: 40, halign: 'right' as const },
+          4: { cellWidth: 15, halign: 'right' as const },
+          5: { cellWidth: 25, halign: 'right' as const }
+        },
+        margin: { left: pageMargin, right: pageMargin }
+      });
+      mainContentStartY = (doc as any).lastAutoTable.finalY + 2;
+      (doc as any).autoTable({
+        body: [[
+          {content: 'Total Dépenses', colSpan: 2, styles: {fontStyle: 'bold' as const, halign: 'left' as const}},
+          {content: formatForPdf(totalDepensesPrevus), styles: {fontStyle: 'bold' as const, halign: 'right' as const}},
+          {content: formatForPdf(totalDepensesRealisees), styles: {fontStyle: 'bold' as const, halign: 'right' as const}},
+          {content: '', styles: {}},
+          {content: '', styles: {}}
+        ]],
+        startY: mainContentStartY,
+        theme: 'grid',
+        styles: {...tableCellStyles, fontStyle: 'bold' as const},
+        columnStyles: {
+          0: { cellWidth: 65 },
+          1: { cellWidth: 40 },
+          2: { cellWidth: 40 },
+          3: { cellWidth: 15 },
+          4: { cellWidth: 25 }
+        },
+        didParseCell: function (data: any) {
+          if (data.row.index === 0 && data.cell.raw.content === 'Total Dépenses') {
+              data.cell.colSpan = 2;
+          }
+        },
+        margin: { left: pageMargin, right: pageMargin }
+      });
+      mainContentStartY = (doc as any).lastAutoTable.finalY + 10;
 
-    doc.save(`etat_de_caisse_${format(new Date(), 'yyyyMMddHHmm')}.pdf`);
+      doc.setFontSize(10);
+      const availableWidthForBalance = doc.internal.pageSize.getWidth() - (2 * pageMargin);
+      (doc as any).autoTable({
+          body: [
+              [
+              { content: 'BALANCE', styles: { fontStyle: 'bold' as const, halign: 'left' as const, cellWidth: availableWidthForBalance * 0.25 } },
+              { content: `Recettes: ${formatForPdf(totalRecettesRealisees)}`, styles: {halign: 'right' as const, cellWidth: availableWidthForBalance * 0.25} },
+              { content: `Dépenses: ${formatForPdf(totalDepensesRealisees)}`, styles: {halign: 'right' as const, cellWidth: availableWidthForBalance * 0.25} },
+              { content: `Solde: ${formatForPdf(soldeRealise)}`, styles: { fontStyle: 'bold' as const, halign: 'right' as const, cellWidth: availableWidthForBalance * 0.25} },
+              ]
+          ],
+          startY: mainContentStartY,
+          theme: 'plain',
+          styles: {...tableCellStyles, fontStyle: 'bold' as const, cellPadding: 2 },
+          tableWidth: 'auto',
+          margin: { left: pageMargin, right: pageMargin },
+          didDrawPage: (data: any) => {
+              const pageCount = doc.internal.getNumberOfPages();
+              doc.setFontSize(8);
+              doc.setFont("helvetica", "normal");
+              const pageInfo = `Page ${data.pageNumber} sur ${pageCount}`;
+              const footerTextParts = [
+                  settings.rccm ? `RCCM: ${settings.rccm}` : '',
+                  settings.niu ? `NIU: ${settings.niu}` : '',
+              ].filter(Boolean);
+
+              const contactText = settings.companyContact ? `Contact: ${settings.companyContact}` : '';
+              
+              const footerLine1 = footerTextParts.join(' | ');
+              doc.text(footerLine1, pageMargin, doc.internal.pageSize.getHeight() - 10);
+              if (contactText) {
+                  doc.text(contactText, pageMargin, doc.internal.pageSize.getHeight() - 6);
+              }
+              doc.text(pageInfo, doc.internal.pageSize.getWidth() - pageMargin - doc.getTextWidth(pageInfo), doc.internal.pageSize.getHeight() - 10);
+          }
+      });
+
+      doc.save(`etat_de_caisse_${format(new Date(), 'yyyyMMddHHmm')}.pdf`);
+    } catch (error) {
+      console.error("Error exporting to PDF:", error);
+      toast({ title: "Erreur", description: "Impossible d'exporter en PDF.", variant: "destructive" });
+    } finally {
+      setIsExportingPDF(false);
+    }
   };
 
   const exportToXLSX = () => {
@@ -470,117 +486,128 @@ export default function EtatsPage() {
         toast({ title: "Chargement", description: "Les paramètres de l'entreprise ne sont pas encore chargés.", variant: "default"});
         return;
     }
-    const wb = XLSX.utils.book_new();
+    if (isExportingXLSX) return;
+    setIsExportingXLSX(true);
 
-    const headerXlsx: any[][] = [
-      [settings.companyName || "GESTION CAISSE"],
-      ...(settings.companyAddress ? [[settings.companyAddress]] : []),
-      ...(settings.companyContact ? [[`Contact: ${settings.companyContact}`]] : []),
-      [etatTitle.toUpperCase()],
-      [`Date d'export: ${currentPrintDate}`],
-      [],
-    ];
+    try {
+      const wb = XLSX.utils.book_new();
 
-    const wsDataRecettes = recettesData.map(r => ({
-      "N°": r.numero,
-      "Types de recettes": r.type,
-      "Montant Prévu": r.montantPrevu,
-      "Montant Réalisé": r.montantRealise,
-      "% Réal.": r.pourcentageRealisation / 100,
-      "Ecart": r.ecart,
-    }));
-    wsDataRecettes.push({
-      "N°": "", "Types de recettes": "Total Recettes",
-      "Montant Prévu": totalRecettesPrevus, "Montant Réalisé": totalRecettesRealisees,
-      "% Réal.": null as any, "Ecart": null as any
-    });
-
-    const wsDataDepenses = depensesData.map(d => ({
-      "N°": d.numero,
-      "Types de dépenses": d.type,
-      "Montant Prévu": d.montantPrevu,
-      "Montant Réalisé": d.montantRealise,
-      "% Réal.": d.pourcentageRealisation / 100,
-      "Ecart": d.ecart,
-    }));
-    wsDataDepenses.push({
-      "N°": "", "Types de dépenses": "Total Dépenses",
-      "Montant Prévu": totalDepensesPrevus, "Montant Réalisé": totalDepensesRealisees,
-      "% Réal.": null as any, "Ecart": null as any
-    });
-
-    const wsSummary: any[][] = [
-      [],
-      ["BALANCE"],
-      ["Total Recettes Réalisées", totalRecettesRealisees],
-      ["Total Dépenses Réalisées", totalDepensesRealisees],
-      ["Solde", soldeRealise]
-    ];
-
-    const footerXlsx: any[][] = [
+      const headerXlsx: any[][] = [
+        [settings.companyName || "GESTION CAISSE"],
+        ...(settings.companyAddress ? [[settings.companyAddress]] : []),
+        // ...(settings.companyContact ? [[`Contact: ${settings.companyContact}`]] : []), // Moved to footer
+        [etatTitle.toUpperCase()],
+        [`Date d'export: ${currentPrintDate}`],
         [],
-        [
-          (settings.rccm ? `RCCM: ${settings.rccm}` : ''),
-          (settings.niu ? `NIU: ${settings.niu}` : ''),
-        ].filter(Boolean).join(' | ')
-    ];
+      ];
 
-    const ws = XLSX.utils.aoa_to_sheet(headerXlsx);
-    const recettesStartRow = headerXlsx.length + 1;
-    XLSX.utils.sheet_add_aoa(ws, [["I- LES RECETTES"]], {origin: `A${recettesStartRow}`});
-    XLSX.utils.sheet_add_json(ws, wsDataRecettes, {origin: `A${recettesStartRow + 1}`, skipHeader: false});
+      const wsDataRecettes = recettesData.map(r => ({
+        "N°": r.numero,
+        "Types de recettes": r.type,
+        "Montant Prévu": r.montantPrevu,
+        "Montant Réalisé": r.montantRealise,
+        "% Réal.": r.pourcentageRealisation / 100,
+        "Ecart": r.ecart,
+      }));
+      wsDataRecettes.push({
+        "N°": "", "Types de recettes": "Total Recettes",
+        "Montant Prévu": totalRecettesPrevus, "Montant Réalisé": totalRecettesRealisees,
+        "% Réal.": null as any, "Ecart": null as any
+      });
 
-    const depensesStartRow = recettesStartRow + 1 + wsDataRecettes.length + 1;
-    XLSX.utils.sheet_add_aoa(ws, [["II- LES DEPENSES"]], {origin: {r: depensesStartRow -1 , c: 0}});
-    XLSX.utils.sheet_add_json(ws, wsDataDepenses, {origin: {r: depensesStartRow, c: 0}, skipHeader: false});
+      const wsDataDepenses = depensesData.map(d => ({
+        "N°": d.numero,
+        "Types de dépenses": d.type,
+        "Montant Prévu": d.montantPrevu,
+        "Montant Réalisé": d.montantRealise,
+        "% Réal.": d.pourcentageRealisation / 100,
+        "Ecart": d.ecart,
+      }));
+      wsDataDepenses.push({
+        "N°": "", "Types de dépenses": "Total Dépenses",
+        "Montant Prévu": totalDepensesPrevus, "Montant Réalisé": totalDepensesRealisees,
+        "% Réal.": null as any, "Ecart": null as any
+      });
 
-    const summaryStartRow = depensesStartRow + wsDataDepenses.length + 1;
-    XLSX.utils.sheet_add_aoa(ws, wsSummary, {origin: {r: summaryStartRow -1, c:0}, skipHeader: true});
-    XLSX.utils.sheet_add_aoa(ws, footerXlsx, { origin: -1 });
+      const wsSummary: any[][] = [
+        [],
+        ["BALANCE"],
+        ["Total Recettes Réalisées", totalRecettesRealisees],
+        ["Total Dépenses Réalisées", totalDepensesRealisees],
+        ["Solde", soldeRealise]
+      ];
+
+      const footerXlsx: any[][] = [
+          [],
+          [
+            (settings.rccm ? `RCCM: ${settings.rccm}` : ''),
+            (settings.niu ? `NIU: ${settings.niu}` : ''),
+            (settings.companyContact ? `Contact: ${settings.companyContact}` : '')
+          ].filter(Boolean).join(' | ')
+      ];
+
+      const ws = XLSX.utils.aoa_to_sheet(headerXlsx);
+      const recettesStartRow = headerXlsx.length + 1;
+      XLSX.utils.sheet_add_aoa(ws, [["I- LES RECETTES"]], {origin: `A${recettesStartRow}`});
+      XLSX.utils.sheet_add_json(ws, wsDataRecettes, {origin: `A${recettesStartRow + 1}`, skipHeader: false});
+
+      const depensesStartRow = recettesStartRow + 1 + wsDataRecettes.length + 1;
+      XLSX.utils.sheet_add_aoa(ws, [["II- LES DEPENSES"]], {origin: {r: depensesStartRow -1 , c: 0}});
+      XLSX.utils.sheet_add_json(ws, wsDataDepenses, {origin: {r: depensesStartRow, c: 0}, skipHeader: false});
+
+      const summaryStartRow = depensesStartRow + wsDataDepenses.length + 1;
+      XLSX.utils.sheet_add_aoa(ws, wsSummary, {origin: {r: summaryStartRow -1, c:0}, skipHeader: true});
+      XLSX.utils.sheet_add_aoa(ws, footerXlsx, { origin: -1 });
 
 
-    ws['!cols'] = [{wch:5}, {wch:35}, {wch:18}, {wch:18}, {wch:10}, {wch:18}];
+      ws['!cols'] = [{wch:5}, {wch:35}, {wch:18}, {wch:18}, {wch:10}, {wch:18}];
 
-    const currencyFormat = '#,##0 "F CFA"';
-    const percentageFormat = '0%';
+      const currencyFormat = '#,##0 "F CFA"';
+      const percentageFormat = '0%';
 
-    for (let i = 0; i < wsDataRecettes.length; i++) {
-        const rowIndex = recettesStartRow + 1 + i;
-        if (ws[`C${rowIndex}`]) ws[`C${rowIndex}`].z = currencyFormat;
-        if (ws[`D${rowIndex}`]) ws[`D${rowIndex}`].z = currencyFormat;
-        if (ws[`E${rowIndex}`] && wsDataRecettes[i]["% Réal."] !== null) ws[`E${rowIndex}`].z = percentageFormat;
-        if (ws[`F${rowIndex}`] && wsDataRecettes[i]["Ecart"] !== null) ws[`F${rowIndex}`].z = currencyFormat;
+      for (let i = 0; i < wsDataRecettes.length; i++) {
+          const rowIndex = recettesStartRow + 1 + i;
+          if (ws[`C${rowIndex}`]) ws[`C${rowIndex}`].z = currencyFormat;
+          if (ws[`D${rowIndex}`]) ws[`D${rowIndex}`].z = currencyFormat;
+          if (ws[`E${rowIndex}`] && wsDataRecettes[i]["% Réal."] !== null) ws[`E${rowIndex}`].z = percentageFormat;
+          if (ws[`F${rowIndex}`] && wsDataRecettes[i]["Ecart"] !== null) ws[`F${rowIndex}`].z = currencyFormat;
+      }
+      for (let i = 0; i < wsDataDepenses.length; i++) {
+          const rowIndex = depensesStartRow + 1 + i;
+          if (ws[`C${rowIndex}`]) ws[`C${rowIndex}`].z = currencyFormat;
+          if (ws[`D${rowIndex}`]) ws[`D${rowIndex}`].z = currencyFormat;
+          if (ws[`E${rowIndex}`] && wsDataDepenses[i]["% Réal."] !== null) ws[`E${rowIndex}`].z = percentageFormat;
+          if (ws[`F${rowIndex}`] && wsDataDepenses[i]["Ecart"] !== null) ws[`F${rowIndex}`].z = currencyFormat;
+      }
+
+      const balanceDataStartRow = summaryStartRow + 1;
+      if (ws[`B${balanceDataStartRow}`]) ws[`B${balanceDataStartRow}`].z = currencyFormat;
+      if (ws[`B${balanceDataStartRow + 1}`]) ws[`B${balanceDataStartRow + 1}`].z = currencyFormat;
+      if (ws[`B${balanceDataStartRow + 2}`]) ws[`B${balanceDataStartRow + 2}`].z = currencyFormat;
+
+      if(!ws['!merges']) ws['!merges'] = [];
+      const maxColIndexXlsx = ws['!cols']!.length -1;
+      headerXlsx.forEach((row, rowIndex) => {
+        if (row.length === 1 && rowIndex < headerXlsx.length -1 ) {
+              ws['!merges']?.push({s: {r:rowIndex, c:0}, e: {r:rowIndex, c:maxColIndexXlsx}});
+          }
+      });
+      ws['!merges'].push({s: {r:recettesStartRow-1, c:0}, e: {r:recettesStartRow-1, c:maxColIndexXlsx}});
+      ws['!merges'].push({s: {r:depensesStartRow -1, c:0}, e: {r:depensesStartRow -1, c:maxColIndexXlsx}});
+      ws['!merges'].push({s: {r:summaryStartRow -1, c:0}, e: {r:summaryStartRow -1, c:maxColIndexXlsx}});
+      const footerRowIndexXlsx = headerXlsx.length + 1 + wsDataRecettes.length + 1 + wsDataDepenses.length + 1 + wsSummary.length + 1;
+      if (footerXlsx[1] && footerXlsx[1].length === 1) {
+          ws['!merges']?.push({ s: { r: footerRowIndexXlsx, c: 0 }, e: { r: footerRowIndexXlsx, c: maxColIndexXlsx } });
+      }
+
+      XLSX.utils.book_append_sheet(wb, ws, "Etat de Caisse");
+      XLSX.writeFile(wb, `etat_de_caisse_${format(new Date(), 'yyyyMMddHHmm')}.xlsx`);
+    } catch (error) {
+      console.error("Error exporting to XLSX:", error);
+      toast({ title: "Erreur", description: "Impossible d'exporter en XLSX.", variant: "destructive" });
+    } finally {
+      setIsExportingXLSX(false);
     }
-    for (let i = 0; i < wsDataDepenses.length; i++) {
-        const rowIndex = depensesStartRow + 1 + i;
-        if (ws[`C${rowIndex}`]) ws[`C${rowIndex}`].z = currencyFormat;
-        if (ws[`D${rowIndex}`]) ws[`D${rowIndex}`].z = currencyFormat;
-        if (ws[`E${rowIndex}`] && wsDataDepenses[i]["% Réal."] !== null) ws[`E${rowIndex}`].z = percentageFormat;
-        if (ws[`F${rowIndex}`] && wsDataDepenses[i]["Ecart"] !== null) ws[`F${rowIndex}`].z = currencyFormat;
-    }
-
-    const balanceDataStartRow = summaryStartRow + 1;
-    if (ws[`B${balanceDataStartRow}`]) ws[`B${balanceDataStartRow}`].z = currencyFormat;
-    if (ws[`B${balanceDataStartRow + 1}`]) ws[`B${balanceDataStartRow + 1}`].z = currencyFormat;
-    if (ws[`B${balanceDataStartRow + 2}`]) ws[`B${balanceDataStartRow + 2}`].z = currencyFormat;
-
-    if(!ws['!merges']) ws['!merges'] = [];
-    const maxColIndexXlsx = ws['!cols']!.length -1;
-    headerXlsx.forEach((row, rowIndex) => {
-       if (row.length === 1 && rowIndex < headerXlsx.length -1 ) {
-             ws['!merges']?.push({s: {r:rowIndex, c:0}, e: {r:rowIndex, c:maxColIndexXlsx}});
-        }
-    });
-    ws['!merges'].push({s: {r:recettesStartRow-1, c:0}, e: {r:recettesStartRow-1, c:maxColIndexXlsx}});
-    ws['!merges'].push({s: {r:depensesStartRow -1, c:0}, e: {r:depensesStartRow -1, c:maxColIndexXlsx}});
-    ws['!merges'].push({s: {r:summaryStartRow -1, c:0}, e: {r:summaryStartRow -1, c:maxColIndexXlsx}});
-    const footerRowIndexXlsx = headerXlsx.length + 1 + wsDataRecettes.length + 1 + wsDataDepenses.length + 1 + wsSummary.length + 1;
-     if (footerXlsx[1] && footerXlsx[1].length === 1) {
-        ws['!merges']?.push({ s: { r: footerRowIndexXlsx, c: 0 }, e: { r: footerRowIndexXlsx, c: maxColIndexXlsx } });
-     }
-
-    XLSX.utils.book_append_sheet(wb, ws, "Etat de Caisse");
-    XLSX.writeFile(wb, `etat_de_caisse_${format(new Date(), 'yyyyMMddHHmm')}.xlsx`);
   };
 
   const handlePrint = () => {
@@ -722,21 +749,23 @@ export default function EtatsPage() {
         <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button className="w-full sm:w-auto" disabled={isLoadingSettings || isLoadingBudgets}>
-                {(isLoadingSettings || isLoadingBudgets) ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Download className="mr-2 h-4 w-4" />}
+              <Button className="w-full sm:w-auto" disabled={isLoadingSettings || isLoadingBudgets || isExportingPDF || isExportingXLSX}>
+                {(isExportingPDF || isExportingXLSX) ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Download className="mr-2 h-4 w-4" />}
                 Exporter <ChevronDown className="ml-2 h-4 w-4" />
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
-              <DropdownMenuItem onClick={exportToPDF} disabled={isLoadingSettings || isLoadingBudgets || !settings}>
-                <FileText className="mr-2 h-4 w-4" /> Exporter en PDF (A4 Portrait)
+              <DropdownMenuItem onClick={exportToPDF} disabled={isLoadingSettings || isLoadingBudgets || !settings || isExportingPDF}>
+                {isExportingPDF ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <FileText className="mr-2 h-4 w-4" />} 
+                Exporter en PDF (A4 Portrait)
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={exportToXLSX} disabled={isLoadingSettings || isLoadingBudgets || !settings}>
-                <FileSpreadsheet className="mr-2 h-4 w-4" /> Exporter en XLSX
+              <DropdownMenuItem onClick={exportToXLSX} disabled={isLoadingSettings || isLoadingBudgets || !settings || isExportingXLSX}>
+                {isExportingXLSX ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <FileSpreadsheet className="mr-2 h-4 w-4" />}
+                 Exporter en XLSX
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
-          <Button onClick={handlePrint} variant="outline" className="w-full sm:w-auto" disabled={isLoadingSettings || isLoadingBudgets || !settings}>
+          <Button onClick={handlePrint} variant="outline" className="w-full sm:w-auto" disabled={isLoadingSettings || isLoadingBudgets || !settings || isExportingPDF || isExportingXLSX}>
             {(isLoadingSettings || isLoadingBudgets) ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Printer className="mr-2 h-4 w-4" />}
              Imprimer
           </Button>

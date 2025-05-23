@@ -1,3 +1,4 @@
+
 "use client";
 import { useMemo, useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -50,6 +51,11 @@ export default function JournalPage() {
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
   const [currentDate, setCurrentDate] = useState("");
+  const [deletingTransactionId, setDeletingTransactionId] = useState<string | null>(null);
+  const [isExportingCSV, setIsExportingCSV] = useState(false);
+  const [isExportingPDF, setIsExportingPDF] = useState(false);
+  const [isExportingXLSX, setIsExportingXLSX] = useState(false);
+
 
   useEffect(() => {
     fetchTransactions();
@@ -89,12 +95,19 @@ export default function JournalPage() {
   
   const handleDeleteTransaction = async (id: string) => {
     if (confirm("Êtes-vous sûr de vouloir supprimer cette transaction du journal ?")) {
-      const success = await deleteTransaction(id);
-      if (success) {
-        toast({ title: "Succès", description: "Transaction supprimée du journal." });
-        fetchTransactions(); 
-      } else {
-        toast({ title: "Erreur", description: errorTransactions || "Impossible de supprimer la transaction.", variant: "destructive" });
+      setDeletingTransactionId(id);
+      try {
+        const success = await deleteTransaction(id);
+        if (success) {
+          toast({ title: "Succès", description: "Transaction supprimée du journal." });
+          fetchTransactions(); 
+        } else {
+          toast({ title: "Erreur", description: errorTransactions || "Impossible de supprimer la transaction.", variant: "destructive" });
+        }
+      } catch (error) {
+        toast({ title: "Erreur", description: "Une erreur est survenue.", variant: "destructive" });
+      } finally {
+        setDeletingTransactionId(null);
       }
     }
   };
@@ -107,42 +120,51 @@ export default function JournalPage() {
   };
 
   const exportToCSV = () => {
-    const headers = ["N° Ordre", "Date", "Description", "Référence", "Catégorie", "Type", "Revenu (F CFA)", "Dépense (F CFA)", "Solde (F CFA)"];
-    const entriesToExport = [...journalEntries]; 
+    if (isExportingCSV) return;
+    setIsExportingCSV(true);
+    try {
+      const headers = ["N° Ordre", "Date", "Description", "Référence", "Catégorie", "Type", "Revenu (F CFA)", "Dépense (F CFA)", "Solde (F CFA)"];
+      const entriesToExport = [...journalEntries]; 
 
-    const rows = entriesToExport.map(entry => {
-      const income = entry.type === 'income' ? entry.amount : 0;
-      const expense = entry.type === 'expense' ? entry.amount : 0;
-      const orderNumberCSV = `"${String(entry.orderNumber || '').replace(/"/g, '""')}"`;
-      const descriptionCSV = `"${String(entry.description || '').replace(/"/g, '""')}"`;
-      const referenceCSV = `"${String(entry.reference || '').replace(/"/g, '""')}"`;
-      const categoryNameCSV = `"${String(entry.categoryName || '').replace(/"/g, '""')}"`;
-      
-      return [
-        orderNumberCSV,
-        format(entry.date, 'yyyy-MM-dd', { locale: fr }),
-        descriptionCSV,
-        referenceCSV,
-        categoryNameCSV,
-        entry.type === 'income' ? 'Revenu' : 'Dépense',
-        income.toFixed(0),
-        expense.toFixed(0),
-        entry.balance.toFixed(0)
-      ].join(',');
-    });
+      const rows = entriesToExport.map(entry => {
+        const income = entry.type === 'income' ? entry.amount : 0;
+        const expense = entry.type === 'expense' ? entry.amount : 0;
+        const orderNumberCSV = `"${String(entry.orderNumber || '').replace(/"/g, '""')}"`;
+        const descriptionCSV = `"${String(entry.description || '').replace(/"/g, '""')}"`;
+        const referenceCSV = `"${String(entry.reference || '').replace(/"/g, '""')}"`;
+        const categoryNameCSV = `"${String(entry.categoryName || '').replace(/"/g, '""')}"`;
+        
+        return [
+          orderNumberCSV,
+          format(entry.date, 'yyyy-MM-dd', { locale: fr }),
+          descriptionCSV,
+          referenceCSV,
+          categoryNameCSV,
+          entry.type === 'income' ? 'Revenu' : 'Dépense',
+          income.toFixed(0),
+          expense.toFixed(0),
+          entry.balance.toFixed(0)
+        ].join(',');
+      });
 
-    const csvContent = `${headers.join(',')}\n${rows.join('\n')}`;
-    const blob = new Blob(["\uFEFF" + csvContent], { type: 'text/csv;charset=utf-8;' }); 
-    const link = document.createElement("a");
-    if (link.download !== undefined) {
-      const url = URL.createObjectURL(blob);
-      link.setAttribute("href", url);
-      link.setAttribute("download", `journal_caisse_${format(new Date(), 'yyyyMMddHHmm')}.csv`);
-      link.style.visibility = 'hidden';
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      URL.revokeObjectURL(url);
+      const csvContent = `${headers.join(',')}\n${rows.join('\n')}`;
+      const blob = new Blob(["\uFEFF" + csvContent], { type: 'text/csv;charset=utf-8;' }); 
+      const link = document.createElement("a");
+      if (link.download !== undefined) {
+        const url = URL.createObjectURL(blob);
+        link.setAttribute("href", url);
+        link.setAttribute("download", `journal_caisse_${format(new Date(), 'yyyyMMddHHmm')}.csv`);
+        link.style.visibility = 'hidden';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+      }
+    } catch (error) {
+      console.error("Error exporting to CSV:", error);
+      toast({ title: "Erreur", description: "Impossible d'exporter en CSV.", variant: "destructive" });
+    } finally {
+      setIsExportingCSV(false);
     }
   };
 
@@ -151,132 +173,151 @@ export default function JournalPage() {
          toast({ title: "Chargement", description: "Les paramètres de l'entreprise ne sont pas encore chargés.", variant: "default"});
         return;
     }
-    const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' }); 
-    const tableColumn = ["N° Ordre", "Date", "Description", "Référence", "Catégorie", "Type", "Revenu", "Dépense", "Solde"];
-    const tableRows: (string | number)[][] = [];
-    const pageMargin = 10;
-    
-    journalEntries.forEach(entry => {
-      const entryData = [
-        entry.orderNumber || '-',
-        format(entry.date, 'dd/MM/yy', { locale: fr }), 
-        entry.description,
-        entry.reference || '-',
-        entry.categoryName,
-        entry.type === 'income' ? 'Revenu' : 'Dépense',
-        entry.type === 'income' ? formatForPdf(entry.amount) : '-',
-        entry.type === 'expense' ? formatForPdf(entry.amount) : '-',
-        formatForPdf(entry.balance)
-      ];
-      tableRows.push(entryData);
-    });
+    if (isExportingPDF) return;
+    setIsExportingPDF(true);
 
-    let logoStartY = 10;
-    let headerTextStartY = logoStartY;
-    const logoMaxHeight = 12;
-    const logoMaxWidth = 35;
-    let actualLogoWidth = 0;
+    try {
+      const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' }); 
+      const tableColumn = ["N° Ordre", "Date", "Description", "Référence", "Catégorie", "Type", "Revenu", "Dépense", "Solde"];
+      const tableRows: (string | number)[][] = [];
+      const pageMargin = 10;
+      
+      journalEntries.forEach(entry => {
+        const entryData = [
+          entry.orderNumber || '-',
+          format(entry.date, 'dd/MM/yy', { locale: fr }), 
+          entry.description,
+          entry.reference || '-',
+          entry.categoryName,
+          entry.type === 'income' ? 'Revenu' : 'Dépense',
+          entry.type === 'income' ? formatForPdf(entry.amount) : '-',
+          entry.type === 'expense' ? formatForPdf(entry.amount) : '-',
+          formatForPdf(entry.balance)
+        ];
+        tableRows.push(entryData);
+      });
 
-    if (settings.companyLogoUrl) {
-        try {
-            const response = await fetch(settings.companyLogoUrl);
-            if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-            const blob = await response.blob();
-            await new Promise<void>((resolve, reject) => {
-                const reader = new FileReader();
-                reader.onloadend = () => {
-                     if (reader.error) {
-                        console.error("Erreur FileReader (Journal):", reader.error);
-                        reject(reader.error);
-                        return;
-                    }
-                    try {
-                        const img = new Image();
-                        img.onload = () => {
-                            let w = img.width;
-                            let h = img.height;
-                            const ratio = w / h;
+      let logoStartY = 10;
+      let headerTextStartY = logoStartY;
+      const logoMaxHeight = 12;
+      const logoMaxWidth = 35;
+      let actualLogoWidth = 0;
 
-                            if (w > logoMaxWidth) { w = logoMaxWidth; h = w / ratio; }
-                            if (h > logoMaxHeight) { h = logoMaxHeight; w = h * ratio; }
-                            actualLogoWidth = w;
-                            doc.addImage(reader.result as string, 'PNG', pageMargin, logoStartY, w, h);
-                            resolve();
-                        };
-                        img.onerror = reject;
-                        img.src = reader.result as string;
-                    } catch (imgError) { reject(imgError); }
-                };
-                reader.onerror = reject;
-                reader.readAsDataURL(blob);
-            });
-        } catch (error) {
-            console.error("Erreur de chargement du logo pour PDF (Journal):", error);
-        }
-    }
+      if (settings.companyLogoUrl) {
+          try {
+              const response = await fetch(settings.companyLogoUrl);
+              if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+              const blob = await response.blob();
+              await new Promise<void>((resolve, reject) => {
+                  const reader = new FileReader();
+                  reader.onloadend = () => {
+                      if (reader.error) {
+                          console.error("Erreur FileReader (Journal):", reader.error);
+                          reject(reader.error);
+                          return;
+                      }
+                      try {
+                          const img = new Image();
+                          img.onload = () => {
+                              let w = img.width;
+                              let h = img.height;
+                              const ratio = w / h;
 
-    const headerTextX = pageMargin + (actualLogoWidth > 0 ? actualLogoWidth + 3 : 0);
-    const headerTextWidth = doc.internal.pageSize.getWidth() - headerTextX - pageMargin;
+                              if (w > logoMaxWidth) { w = logoMaxWidth; h = w / ratio; }
+                              if (h > logoMaxHeight) { h = logoMaxHeight; w = h * ratio; }
+                              actualLogoWidth = w;
+                              doc.addImage(reader.result as string, 'PNG', pageMargin, logoStartY, w, h);
+                              resolve();
+                          };
+                          img.onerror = (err) => {
+                            console.error("Erreur img.onerror (Journal):", err);
+                            reject(err);
+                          };
+                          img.src = reader.result as string;
+                      } catch (imgError) { 
+                        console.error("Erreur doc.addImage (Journal):", imgError);
+                        reject(imgError); 
+                      }
+                  };
+                  reader.onerror = (err) => {
+                    console.error("Erreur reader.onerror (Journal):", err);
+                    reject(err);
+                  };
+                  reader.readAsDataURL(blob);
+              });
+          } catch (error) {
+              console.error("Erreur de chargement du logo pour PDF (Journal):", error);
+          }
+      }
 
-    doc.setFontSize(12);
-    doc.setFont("helvetica", "bold");
-    doc.text(settings.companyName || "GESTION CAISSE", headerTextX, headerTextStartY + 4, { align: 'left', maxWidth: headerTextWidth });
-    headerTextStartY += 5;
-    
-    if (settings.companyAddress) {
-      doc.setFontSize(7);
-      doc.setFont("helvetica", "normal");
-      doc.text(settings.companyAddress, headerTextX, headerTextStartY, { align: 'left', maxWidth: headerTextWidth });
-      headerTextStartY += 3;
-    }
+      const headerTextX = pageMargin + (actualLogoWidth > 0 ? actualLogoWidth + 3 : 0);
+      const headerTextWidth = doc.internal.pageSize.getWidth() - headerTextX - pageMargin;
 
-    let mainContentStartY = Math.max(logoStartY + logoMaxHeight + 3, headerTextStartY + 3);
-
-    doc.setFontSize(10);
-    doc.setFont("helvetica", "bold");
-    doc.text("JOURNAL DE CAISSE", doc.internal.pageSize.getWidth() / 2, mainContentStartY, { align: 'center' });
-    mainContentStartY += 5;
-    doc.setFontSize(8);
-    doc.setFont("helvetica", "normal");
-    doc.text(`Date d'export: ${currentDate}`, doc.internal.pageSize.getWidth() / 2, mainContentStartY, { align: 'center' });
-    mainContentStartY += 6;
-
-
-    (doc as any).autoTable({
-      head: [tableColumn],
-      body: tableRows,
-      startY: mainContentStartY, 
-      theme: 'grid',
-      headStyles: { fillColor: [74, 85, 104], fontSize: 7, textColor: [255,255,255] }, // Darker Gray
-      styles: { font: 'helvetica', fontSize: 6.5, cellPadding: 1, overflow: 'linebreak' }, 
-      columnStyles: {
-        0: { cellWidth: 15 }, 
-        1: { cellWidth: 18 }, 
-        2: { cellWidth: 65 }, // Increased for description
-        3: { cellWidth: 25 }, 
-        4: { cellWidth: 35 }, 
-        5: { cellWidth: 18 }, 
-        6: { cellWidth: 28, halign: 'right' as const }, // Revenu
-        7: { cellWidth: 28, halign: 'right' as const }, // Dépense
-        8: { cellWidth: 30, halign: 'right' as const }, // Solde
-      },
-      margin: { left: pageMargin, right: pageMargin, top: 5, bottom: 15 }, // Added bottom margin for footer
-      didDrawPage: (data: any) => {
-        const pageCount = doc.internal.getNumberOfPages();
+      doc.setFontSize(12);
+      doc.setFont("helvetica", "bold");
+      doc.text(settings.companyName || "GESTION CAISSE", headerTextX, headerTextStartY + 4, { align: 'left', maxWidth: headerTextWidth });
+      headerTextStartY += 5;
+      
+      if (settings.companyAddress) {
         doc.setFontSize(7);
         doc.setFont("helvetica", "normal");
-        const pageInfo = `Page ${data.pageNumber} sur ${pageCount}`;
-        const footerTextParts = [
-            settings.rccm ? `RCCM: ${settings.rccm}` : '',
-            settings.niu ? `NIU: ${settings.niu}` : '',
-            settings.companyContact ? `Contact: ${settings.companyContact}` : ''
-        ].filter(Boolean);
-        
-        doc.text(footerTextParts.join('  |  '), pageMargin, doc.internal.pageSize.getHeight() - 8);
-        doc.text(pageInfo, doc.internal.pageSize.getWidth() - pageMargin - doc.getTextWidth(pageInfo), doc.internal.pageSize.getHeight() - 8);
+        doc.text(settings.companyAddress, headerTextX, headerTextStartY, { align: 'left', maxWidth: headerTextWidth });
+        headerTextStartY += 3;
       }
-    });
-    doc.save(`journal_caisse_${format(new Date(), 'yyyyMMddHHmm')}.pdf`);
+
+      let mainContentStartY = Math.max(logoStartY + logoMaxHeight + 3, headerTextStartY + 3);
+
+      doc.setFontSize(10);
+      doc.setFont("helvetica", "bold");
+      doc.text("JOURNAL DE CAISSE", doc.internal.pageSize.getWidth() / 2, mainContentStartY, { align: 'center' });
+      mainContentStartY += 5;
+      doc.setFontSize(8);
+      doc.setFont("helvetica", "normal");
+      doc.text(`Date d'export: ${currentDate}`, doc.internal.pageSize.getWidth() / 2, mainContentStartY, { align: 'center' });
+      mainContentStartY += 6;
+
+
+      (doc as any).autoTable({
+        head: [tableColumn],
+        body: tableRows,
+        startY: mainContentStartY, 
+        theme: 'grid',
+        headStyles: { fillColor: [74, 85, 104], fontSize: 7, textColor: [255,255,255] }, // Darker Gray
+        styles: { font: 'helvetica', fontSize: 6.5, cellPadding: 1, overflow: 'linebreak' }, 
+        columnStyles: {
+          0: { cellWidth: 15 }, 
+          1: { cellWidth: 18 }, 
+          2: { cellWidth: 65 }, 
+          3: { cellWidth: 25 }, 
+          4: { cellWidth: 35 }, 
+          5: { cellWidth: 18 }, 
+          6: { cellWidth: 28, halign: 'right' as const }, 
+          7: { cellWidth: 28, halign: 'right' as const }, 
+          8: { cellWidth: 30, halign: 'right' as const }, 
+        },
+        margin: { left: pageMargin, right: pageMargin, top: 5, bottom: 15 }, 
+        didDrawPage: (data: any) => {
+          const pageCount = doc.internal.getNumberOfPages();
+          doc.setFontSize(7);
+          doc.setFont("helvetica", "normal");
+          const pageInfo = `Page ${data.pageNumber} sur ${pageCount}`;
+          const footerTextParts = [
+              settings.rccm ? `RCCM: ${settings.rccm}` : '',
+              settings.niu ? `NIU: ${settings.niu}` : '',
+              settings.companyContact ? `Contact: ${settings.companyContact}` : ''
+          ].filter(Boolean);
+          
+          doc.text(footerTextParts.join('  |  '), pageMargin, doc.internal.pageSize.getHeight() - 8);
+          doc.text(pageInfo, doc.internal.pageSize.getWidth() - pageMargin - doc.getTextWidth(pageInfo), doc.internal.pageSize.getHeight() - 8);
+        }
+      });
+      doc.save(`journal_caisse_${format(new Date(), 'yyyyMMddHHmm')}.pdf`);
+    } catch (error) {
+      console.error("Error exporting to PDF (Journal):", error);
+      toast({ title: "Erreur", description: "Impossible d'exporter le journal en PDF.", variant: "destructive" });
+    } finally {
+      setIsExportingPDF(false);
+    }
   };
 
   const exportToXLSX = () => {
@@ -284,69 +325,80 @@ export default function JournalPage() {
         toast({ title: "Chargement", description: "Les paramètres de l'entreprise ne sont pas encore chargés.", variant: "default"});
         return;
     }
-    const headerXlsx: any[][] = [ 
-      [settings.companyName || "GESTION CAISSE"],
-      ...(settings.companyAddress ? [[settings.companyAddress]] : []),
-      ...(settings.companyContact ? [[`Contact: ${settings.companyContact}`]] : []),
-      ["JOURNAL DE CAISSE"],
-      [`Date d'export: ${currentDate}`],
-      [], 
-    ];
-    
-    const worksheetData = journalEntries.map(entry => ({
-      "N° Ordre": entry.orderNumber || '',
-      "Date": format(entry.date, 'yyyy-MM-dd', { locale: fr }),
-      "Description": entry.description,
-      "Référence": entry.reference || '',
-      "Catégorie": entry.categoryName,
-      "Type": entry.type === 'income' ? 'Revenu' : 'Dépense',
-      'Revenu (F CFA)': entry.type === 'income' ? entry.amount : null,
-      'Dépense (F CFA)': entry.type === 'expense' ? entry.amount : null,
-      'Solde (F CFA)': entry.balance
-    }));
+    if (isExportingXLSX) return;
+    setIsExportingXLSX(true);
 
-    const footerXlsx: any[][] = [
-        [],
-        [
-          (settings.rccm ? `RCCM: ${settings.rccm}` : ''),
-          (settings.niu ? `NIU: ${settings.niu}` : ''),
-        ].filter(Boolean).join(' | ')
-    ];
+    try {
+      const headerXlsx: any[][] = [ 
+        [settings.companyName || "GESTION CAISSE"],
+        ...(settings.companyAddress ? [[settings.companyAddress]] : []),
+        // ...(settings.companyContact ? [[`Contact: ${settings.companyContact}`]] : []), // Moved to footer
+        ["JOURNAL DE CAISSE"],
+        [`Date d'export: ${currentDate}`],
+        [], 
+      ];
+      
+      const worksheetData = journalEntries.map(entry => ({
+        "N° Ordre": entry.orderNumber || '',
+        "Date": format(entry.date, 'yyyy-MM-dd', { locale: fr }),
+        "Description": entry.description,
+        "Référence": entry.reference || '',
+        "Catégorie": entry.categoryName,
+        "Type": entry.type === 'income' ? 'Revenu' : 'Dépense',
+        'Revenu (F CFA)': entry.type === 'income' ? entry.amount : null,
+        'Dépense (F CFA)': entry.type === 'expense' ? entry.amount : null,
+        'Solde (F CFA)': entry.balance
+      }));
+
+      const footerXlsx: any[][] = [
+          [],
+          [
+            (settings.rccm ? `RCCM: ${settings.rccm}` : ''),
+            (settings.niu ? `NIU: ${settings.niu}` : ''),
+            (settings.companyContact ? `Contact: ${settings.companyContact}` : '')
+          ].filter(Boolean).join(' | ')
+      ];
 
 
-    const worksheet = XLSX.utils.aoa_to_sheet(headerXlsx); 
-    XLSX.utils.sheet_add_json(worksheet, worksheetData, {origin: `A${headerXlsx.length +1}`}); 
-    XLSX.utils.sheet_add_aoa(worksheet, footerXlsx, { origin: -1 }); 
-    
-    const colWidths = [
-        {wch:10}, {wch:12}, {wch:40}, {wch:20}, {wch:25}, {wch:10}, {wch:18}, {wch:18}, {wch:18} // Adjusted
-    ];
-    worksheet['!cols'] = colWidths;
+      const worksheet = XLSX.utils.aoa_to_sheet(headerXlsx); 
+      XLSX.utils.sheet_add_json(worksheet, worksheetData, {origin: `A${headerXlsx.length +1}`}); 
+      XLSX.utils.sheet_add_aoa(worksheet, footerXlsx, { origin: -1 }); 
+      
+      const colWidths = [
+          {wch:10}, {wch:12}, {wch:40}, {wch:20}, {wch:25}, {wch:10}, {wch:18}, {wch:18}, {wch:18} 
+      ];
+      worksheet['!cols'] = colWidths;
 
-    if(!worksheet['!merges']) worksheet['!merges'] = [];
-    const maxColIndex = colWidths.length - 1;
-    headerXlsx.forEach((row, rowIndex) => {
-        if (row.length === 1 && rowIndex < headerXlsx.length -1 ) { 
-             worksheet['!merges']?.push({s: {r:rowIndex, c:0}, e: {r:rowIndex, c:maxColIndex}});
-        }
-    });
-     const footerRowIndex = headerXlsx.length + worksheetData.length + 1;
-     if (footerXlsx[1] && footerXlsx[1].length === 1) {
-        worksheet['!merges']?.push({ s: { r: footerRowIndex, c: 0 }, e: { r: footerRowIndex, c: maxColIndex } });
-     }
-    
-    const currencyFormat = '#,##0 "F CFA"';
-    const firstDataRow = headerXlsx.length + 2; 
-    for (let i = 0; i < worksheetData.length; i++) {
-        const rowIndex = firstDataRow + i;
-        if (worksheet[`G${rowIndex}`]) worksheet[`G${rowIndex}`].z = currencyFormat; 
-        if (worksheet[`H${rowIndex}`]) worksheet[`H${rowIndex}`].z = currencyFormat; 
-        if (worksheet[`I${rowIndex}`]) worksheet[`I${rowIndex}`].z = currencyFormat; 
+      if(!worksheet['!merges']) worksheet['!merges'] = [];
+      const maxColIndex = colWidths.length - 1;
+      headerXlsx.forEach((row, rowIndex) => {
+          if (row.length === 1 && rowIndex < headerXlsx.length -1 ) { 
+              worksheet['!merges']?.push({s: {r:rowIndex, c:0}, e: {r:rowIndex, c:maxColIndex}});
+          }
+      });
+      const footerRowIndex = headerXlsx.length + worksheetData.length + 1;
+      if (footerXlsx[1] && footerXlsx[1].length === 1) {
+          worksheet['!merges']?.push({ s: { r: footerRowIndex, c: 0 }, e: { r: footerRowIndex, c: maxColIndex } });
+      }
+      
+      const currencyFormat = '#,##0 "F CFA"';
+      const firstDataRow = headerXlsx.length + 2; 
+      for (let i = 0; i < worksheetData.length; i++) {
+          const rowIndex = firstDataRow + i;
+          if (worksheet[`G${rowIndex}`]) worksheet[`G${rowIndex}`].z = currencyFormat; 
+          if (worksheet[`H${rowIndex}`]) worksheet[`H${rowIndex}`].z = currencyFormat; 
+          if (worksheet[`I${rowIndex}`]) worksheet[`I${rowIndex}`].z = currencyFormat; 
+      }
+
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, worksheet, "Journal");
+      XLSX.writeFile(workbook, `journal_caisse_${format(new Date(), 'yyyyMMddHHmm')}.xlsx`);
+    } catch (error) {
+      console.error("Error exporting to XLSX (Journal):", error);
+      toast({ title: "Erreur", description: "Impossible d'exporter le journal en XLSX.", variant: "destructive" });
+    } finally {
+      setIsExportingXLSX(false);
     }
-
-    const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, worksheet, "Journal");
-    XLSX.writeFile(workbook, `journal_caisse_${format(new Date(), 'yyyyMMddHHmm')}.xlsx`);
   };
 
   const handlePrint = () => {
@@ -357,7 +409,7 @@ export default function JournalPage() {
     window.print();
   };
 
- const printHeader = (
+ const printHeader = settings && (
      <div className="print:block hidden my-4 text-center">
         {settings.companyLogoUrl && (
           <div className="flex justify-start items-start mb-2">
@@ -373,7 +425,7 @@ export default function JournalPage() {
             </div>
           </div>
         )}
-        {!settings.companyLogoUrl && (
+        {!settings.companyLogoUrl && settings && (
           <>
             <h1 className="text-xl font-bold text-primary print:text-black">{settings.companyName || "GESTION CAISSE"}</h1>
             {settings.companyAddress && <p className="text-sm print:text-black">{settings.companyAddress}</p>}
@@ -384,7 +436,7 @@ export default function JournalPage() {
       </div>
   );
 
-  const printFooter = (
+  const printFooter = settings && (
       <div className="print:block hidden print-footer-info text-xs text-center mt-4 p-2 border-t">
         <span className="mr-2">{settings.rccm ? `RCCM: ${settings.rccm}` : ''}</span>
         <span className="mr-2">{settings.niu ? `NIU: ${settings.niu}` : ''}</span>
@@ -402,7 +454,7 @@ export default function JournalPage() {
       </div>
     );
   }
-   if (!isLoadingPage && globalError && !journalEntries.length) { // Show error only if no data to display
+   if (!isLoadingPage && globalError && !journalEntries.length) { 
     return <div className="text-center text-destructive py-10"><p>Erreur de chargement du journal: {globalError}</p></div>;
   }
 
@@ -416,30 +468,30 @@ export default function JournalPage() {
           <h1 className="text-3xl font-bold tracking-tight">Journal de Caisse</h1>
           <p className="text-muted-foreground">Un enregistrement chronologique de toutes vos transactions financières.</p>
         </div>
-        <div className="flex gap-2 w-full sm:w-auto">
+        <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button className="w-full sm:w-auto" disabled={isLoadingSettings}>
-                {isLoadingSettings ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Download className="mr-2 h-4 w-4" />}
+              <Button className="w-full sm:w-auto" disabled={isLoadingSettings || isExportingCSV || isExportingPDF || isExportingXLSX}>
+                {(isExportingCSV || isExportingPDF || isExportingXLSX) ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Download className="mr-2 h-4 w-4" />}
                  Exporter <ChevronDown className="ml-2 h-4 w-4" />
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
-              <DropdownMenuItem onClick={exportToCSV} disabled={isLoadingSettings}>
-                <FileText className="mr-2 h-4 w-4" />
+              <DropdownMenuItem onClick={exportToCSV} disabled={isLoadingSettings || isExportingCSV}>
+                {isExportingCSV ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <FileText className="mr-2 h-4 w-4" />}
                 Exporter en CSV
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={exportToPDF} disabled={isLoadingSettings}>
-                <FileText className="mr-2 h-4 w-4" />
+              <DropdownMenuItem onClick={exportToPDF} disabled={isLoadingSettings || isExportingPDF || !settings}>
+                {isExportingPDF ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <FileText className="mr-2 h-4 w-4" />}
                 Exporter en PDF (A4 Paysage)
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={exportToXLSX} disabled={isLoadingSettings}>
-                <FileSpreadsheet className="mr-2 h-4 w-4" />
+              <DropdownMenuItem onClick={exportToXLSX} disabled={isLoadingSettings || isExportingXLSX || !settings}>
+                 {isExportingXLSX ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <FileSpreadsheet className="mr-2 h-4 w-4" />}
                 Exporter en XLSX
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
-          <Button onClick={handlePrint} variant="outline" className="w-full sm:w-auto" disabled={isLoadingSettings}>
+          <Button onClick={handlePrint} variant="outline" className="w-full sm:w-auto" disabled={isLoadingSettings || !settings || isExportingPDF || isExportingXLSX}>
            {isLoadingSettings ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Printer className="mr-2 h-4 w-4" />}
             Imprimer
           </Button>
@@ -508,11 +560,11 @@ export default function JournalPage() {
                     {formatCurrencyCFA(entry.balance)}
                   </TableCell>
                   <TableCell className="text-right print:hidden">
-                    <Button variant="ghost" size="icon" onClick={() => handleEditTransaction(entry)} className="mr-1" aria-label="Modifier" disabled={isLoadingCategories}>
+                    <Button variant="ghost" size="icon" onClick={() => handleEditTransaction(entry)} className="mr-1" aria-label="Modifier" disabled={isLoadingCategories || deletingTransactionId === entry.id}>
                       <Edit2 className="h-4 w-4" />
                     </Button>
-                    <Button variant="ghost" size="icon" onClick={() => handleDeleteTransaction(entry.id)} className="text-destructive hover:text-destructive" aria-label="Supprimer">
-                      <Trash2 className="h-4 w-4" />
+                    <Button variant="ghost" size="icon" onClick={() => handleDeleteTransaction(entry.id)} className="text-destructive hover:text-destructive" aria-label="Supprimer" disabled={deletingTransactionId === entry.id}>
+                      {deletingTransactionId === entry.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
                     </Button>
                   </TableCell>
                 </TableRow>
@@ -525,3 +577,4 @@ export default function JournalPage() {
     </div>
   );
 }
+

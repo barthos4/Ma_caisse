@@ -18,6 +18,8 @@ export default function CategoriesPage() {
 
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingCategory, setEditingCategory] = useState<Category | null>(null);
+  const [deletingCategoryId, setDeletingCategoryId] = useState<string | null>(null);
+
 
   useEffect(() => {
     if (errorCategories) {
@@ -37,12 +39,19 @@ export default function CategoriesPage() {
 
   const handleDeleteCategory = async (id: string) => {
     if (confirm("Êtes-vous sûr de vouloir supprimer cette catégorie ? Cette action est irréversible si la catégorie n'est pas utilisée dans des transactions.")) {
-      const success = await deleteCategory(id);
-      if (success) {
-        toast({ title: "Succès", description: "Catégorie supprimée." });
-        fetchCategories(); // Re-fetch to update list
-      } else {
-         toast({ title: "Erreur", description: errorCategories || "Impossible de supprimer la catégorie. Vérifiez qu'elle n'est pas utilisée.", variant: "destructive" });
+      setDeletingCategoryId(id);
+      try {
+        const success = await deleteCategory(id);
+        if (success) {
+          toast({ title: "Succès", description: "Catégorie supprimée." });
+          fetchCategories(); 
+        } else {
+          toast({ title: "Erreur", description: errorCategories || "Impossible de supprimer la catégorie. Vérifiez qu'elle n'est pas utilisée.", variant: "destructive" });
+        }
+      } catch (error) {
+         toast({ title: "Erreur", description: "Une erreur est survenue lors de la suppression.", variant: "destructive" });
+      } finally {
+        setDeletingCategoryId(null);
       }
     }
   };
@@ -122,11 +131,11 @@ export default function CategoriesPage() {
                       </Badge>
                     </TableCell>
                     <TableCell className="text-right">
-                      <Button variant="ghost" size="icon" onClick={() => handleEditCategory(category)} className="mr-1" aria-label="Modifier">
+                      <Button variant="ghost" size="icon" onClick={() => handleEditCategory(category)} className="mr-1" aria-label="Modifier" disabled={deletingCategoryId === category.id}>
                         <Edit2 className="h-4 w-4" />
                       </Button>
-                      <Button variant="ghost" size="icon" onClick={() => handleDeleteCategory(category.id)} className="text-destructive hover:text-destructive" aria-label="Supprimer">
-                        <Trash2 className="h-4 w-4" />
+                      <Button variant="ghost" size="icon" onClick={() => handleDeleteCategory(category.id)} className="text-destructive hover:text-destructive" aria-label="Supprimer" disabled={deletingCategoryId === category.id}>
+                        {deletingCategoryId === category.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
                       </Button>
                     </TableCell>
                   </TableRow>
@@ -139,3 +148,4 @@ export default function CategoriesPage() {
     </div>
   );
 }
+
