@@ -10,9 +10,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useTransactions, useCategories } from "@/lib/mock-data";
 import type { Category } from "@/types";
 import { formatCurrencyCFA } from "@/lib/utils";
-import { DateRange } from "react-day-picker";
+import type { DateRange } from "react-day-picker";
 import { format, startOfMonth, endOfMonth, subMonths, startOfWeek, endOfWeek, startOfDay, endOfDay, subDays, isSameDay, formatISO } from "date-fns";
-import { fr } from 'date-fns/locale';
+import { fr } from 'date-fns/locale'; // Ensure fr locale is imported
 import { Download, Printer, FileText, FileSpreadsheet, ChevronDown, Loader2 } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { useSettings } from "@/hooks/use-settings";
@@ -303,14 +303,7 @@ export default function EtatsPage() {
         doc.text(settings.companyAddress, headerTextX, headerTextStartY, { align: 'left', maxWidth: headerTextWidth });
         headerTextStartY += 4;
       }
-      // Removed contact from header for PDF to put in footer
-      // if (settings.companyContact) {
-      // doc.setFontSize(8);
-      // doc.setFont("helvetica", "normal");
-      // doc.text(`Contact: ${settings.companyContact}`, headerTextX, headerTextStartY, { align: 'left', maxWidth: headerTextWidth });
-      // headerTextStartY +=4;
-      // }
-
+      
       let mainContentStartY = Math.max(logoStartY + logoMaxHeight + 5, headerTextStartY + 5);
 
 
@@ -495,7 +488,6 @@ export default function EtatsPage() {
       const headerXlsx: any[][] = [
         [settings.companyName || "GESTION CAISSE"],
         ...(settings.companyAddress ? [[settings.companyAddress]] : []),
-        // ...(settings.companyContact ? [[`Contact: ${settings.companyContact}`]] : []), // Moved to footer
         [etatTitle.toUpperCase()],
         [`Date d'export: ${currentPrintDate}`],
         [],
