@@ -30,36 +30,41 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setIsLoading(true);
     const getInitialSession = async () => {
       try {
+        // This call might internally try to use a refresh token.
+        // If the refresh token is invalid, Supabase logs the error,
+        // and this call should ideally return an error or a null session.
         const { data: { session: currentSession }, error } = await supabase.auth.getSession();
         
         if (error) {
-          console.error("Error getting initial session from Supabase:", error);
-          // If there's an error (e.g., invalid refresh token), treat as no session
+          // This will catch errors like "Invalid Refresh Token" if getSession itself surfaces it.
+          console.error("Error getting initial session from Supabase (likely due to invalid token):", error);
           setSession(null);
           setUser(null);
         } else {
-          setSession(currentSession);
+          setSession(currentSession); // currentSession will be null if token was invalid and refresh failed
           setUser(currentSession?.user ?? null);
         }
-      } catch (e) {
-        console.error("Exception caught while getting initial session:", e);
-        // Catch any other unexpected errors during getSession
+      } catch (e) { // Catch any other unexpected errors during getSession
+        console.error("Exception caught during getInitialSession:", e);
         setSession(null);
         setUser(null);
       } finally {
-        setIsLoading(false);
+        setIsLoading(false); // Critical: ensure loading state is resolved
       }
     };
 
     getInitialSession();
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      // The onAuthStateChange listener is crucial for handling session state changes,
+      // including when a session becomes invalid after a failed token refresh.
       async (event: AuthChangeEvent, sessionState: Session | null) => {
         setSession(sessionState);
         setUser(sessionState?.user ?? null);
-        setIsLoading(false); // Ensure loading is false after auth state changes
+        setIsLoading(false); // Ensure loading is false after any auth state changes
 
-        if (event === 'SIGNED_OUT') {
+        // Navigation logic based on new auth state
+        if (event === 'SIGNED_OUT' || (!sessionState && event !== 'INITIAL_SESSION' && event !== 'USER_DELETED')) {
           if (pathname !== '/login') {
             router.replace('/login');
           }
@@ -68,9 +73,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
              router.replace('/');
           }
         }
-        // Handle TOKEN_REFRESHED or USER_UPDATED if necessary, though often just updating session/user is enough.
-        // If a token refresh fails critically, Supabase should eventually set sessionState to null,
-        // which would be handled like a SIGNED_OUT or lead to !isAuthenticated.
       }
     );
 
@@ -82,16 +84,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const loginCallback = useCallback(async (email: string, password?: string): Promise<{ error: AuthError }> => {
     setIsLoading(true);
     const { error } = await supabase.auth.signInWithPassword({ email, password: password! });
-    setIsLoading(false); // Set loading to false regardless of outcome
-    // onAuthStateChange will handle setting user/session and navigation on success
+    setIsLoading(false); 
     return { error };
   }, []);
 
   const logoutCallback = useCallback(async (): Promise<void> => {
-    setIsLoading(true); // Optional: indicate loading during logout
+    setIsLoading(true); 
     await supabase.auth.signOut();
-    // onAuthStateChange will handle clearing user/session and navigation
-    // No need to manually set isLoading to false here if onAuthStateChange does it.
   }, []);
   
   const contextValue: AuthContextType = {
@@ -112,3 +111,4 @@ export function useAuth() {
   }
   return context;
 }
+
