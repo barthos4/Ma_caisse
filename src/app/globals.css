@@ -45,11 +45,11 @@
     --sidebar-border: 210 20% 85%; 
     --sidebar-ring: 207 80% 60%; 
     
-    --chart-1: hsl(207 86% 68%); 
-    --chart-2: hsl(123 45% 65%); 
-    --chart-3: hsl(38 90% 60%); /* Vibrant Orange */
+    --chart-1: hsl(180 60% 45%); /* Teal */
+    --chart-2: hsl(207 86% 68%); /* Soft Blue */
+    --chart-3: hsl(45 85% 60%);  /* Gold */
     --chart-4: hsl(260 70% 70%); /* Soft Purple */
-    --chart-5: hsl(0 70% 65%); /* Soft Red */
+    --chart-5: hsl(25 85% 60%);  /* Warm Orange */
   }
 
   .dark {
@@ -91,11 +91,11 @@
     --sidebar-border: 210 10% 20%; 
     --sidebar-ring: 207 70% 58%;
 
-    --chart-1: hsl(207 75% 60%);
-    --chart-2: hsl(123 40% 55%);
-    --chart-3: hsl(38 80% 55%);
-    --chart-4: hsl(260 60% 65%);
-    --chart-5: hsl(0 60% 60%);
+    --chart-1: hsl(180 60% 55%); /* Teal - Dark Mode */
+    --chart-2: hsl(207 75% 60%); /* Soft Blue - Dark Mode */
+    --chart-3: hsl(45 80% 65%);  /* Gold - Dark Mode */
+    --chart-4: hsl(260 60% 65%); /* Soft Purple - Dark Mode */
+    --chart-5: hsl(25 75% 65%);  /* Warm Orange - Dark Mode */
   }
 }
 
@@ -247,3 +247,5 @@
     padding-top: 5px !important;
   }
 }
+
+    

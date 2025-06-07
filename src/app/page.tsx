@@ -26,11 +26,11 @@ export default function DashboardPage() {
   const chartConfig = {
     income: {
       label: "Revenus",
-      color: "hsl(var(--chart-2))", // Green
+      color: "hsl(var(--chart-2))",
     },
     expenses: {
       label: "Dépenses",
-      color: "hsl(var(--chart-5))", // Red
+      color: "hsl(var(--chart-5))",
     },
   } satisfies Record<string, { label: string; color: string }>;
 
@@ -227,3 +227,5 @@ export default function DashboardPage() {
     </div>
   );
 }
+
+    
